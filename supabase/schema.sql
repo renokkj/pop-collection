@@ -19,6 +19,26 @@ create table if not exists public.cards (
 );
 create index if not exists cards_user_idx on public.cards (user_id, created_at desc);
 
+-- 1b) Categorias de compra: Individual ou CEG, Nacional ou Internacional.
+--     shipping            = frete da GOM até você (todas as categorias)
+--     shipping_to_gom     = frete até a GOM (Individual Internacional e CEG); na CEG, só a sua parte
+--     import_tax          = taxa de importação, opcional (Internacional); na CEG, só a sua parte
+--     Cards antigos ficam como Individual Nacional.
+alter table public.cards
+  add column if not exists purchase_type        text not null default 'individual',
+  add column if not exists origin               text not null default 'nacional',
+  add column if not exists shipping_to_gom      numeric(10,2) not null default 0,
+  add column if not exists import_tax           numeric(10,2) not null default 0,
+  add column if not exists paid_shipping_to_gom boolean not null default false,
+  add column if not exists paid_tax             boolean not null default false;
+alter table public.cards
+  drop constraint if exists cards_purchase_type_check,
+  add constraint cards_purchase_type_check check (purchase_type in ('individual', 'ceg')),
+  drop constraint if exists cards_origin_check,
+  add constraint cards_origin_check check (origin in ('nacional', 'internacional')),
+  drop constraint if exists cards_extra_values_check,
+  add constraint cards_extra_values_check check (shipping_to_gom >= 0 and import_tax >= 0);
+
 -- 2) Total já gasto com coleções apagadas (para o "total gasto" não zerar)
 create table if not exists public.stats (
   user_id        uuid primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -55,7 +75,7 @@ declare
   v_count integer;
   v_paths text[];
 begin
-  select coalesce(sum(price + shipping), 0), count(*),
+  select coalesce(sum(price + shipping + shipping_to_gom + import_tax), 0), count(*),
          coalesce(array_agg(image_path) filter (where image_path is not null), '{}')
     into v_total, v_count, v_paths
     from cards

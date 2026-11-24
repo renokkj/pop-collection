@@ -6,7 +6,7 @@
 <title>Pop Collection</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -64,7 +64,7 @@
   <div id="notice" class="notice" hidden></div>
 
   <section class="summary" aria-label="Resumo de gastos">
-    <div class="big"><span class="label">Total gasto com photocards</span><span class="value" id="sTotal">R$ 0,00</span><span class="sub" id="sTotalSub">preço + frete de todos os cards</span></div>
+    <div class="big"><span class="label">Total gasto com photocards</span><span class="value" id="sTotal">R$ 0,00</span><span class="sub" id="sTotalSub">preço, fretes e taxas de todos os cards</span></div>
     <div><span class="label">Já pago</span><span class="value" id="sPaid">R$ 0,00</span><span class="sub" id="sPaidSub">&nbsp;</span></div>
     <div><span class="label">Falta pagar</span><span class="value" id="sDue">R$ 0,00</span><span class="sub" id="sDueSub">&nbsp;</span></div>
   </section>
@@ -82,10 +82,31 @@
         <input type="text" id="fSeller" list="sellerList" placeholder="ex.: GOM, Shopee" maxlength="80">
         <datalist id="sellerList"></datalist>
       </label>
+      <div class="kind">
+        <div class="f"><span id="lType">Tipo de compra</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lType">
+            <label><input type="radio" name="fType" value="individual" checked><span>Individual</span></label>
+            <label><input type="radio" name="fType" value="ceg"><span title="Compra em grupo">CEG</span></label>
+          </div>
+        </div>
+        <div class="f"><span id="lOrigin">Origem</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lOrigin">
+            <label><input type="radio" name="fOrigin" value="nacional" checked><span>Nacional</span></label>
+            <label><input type="radio" name="fOrigin" value="internacional"><span>Internacional</span></label>
+          </div>
+        </div>
+        <p class="hint" id="fHint"></p>
+      </div>
       <label class="f">Preço (R$)
         <input type="number" id="fPrice" inputmode="decimal" min="0" step="0.01" placeholder="0,00" required>
       </label>
-      <label class="f">Frete (R$)
+      <label class="f" id="fToGomWrap" hidden><span id="fToGomLabel">Frete até a GOM (R$)</span>
+        <input type="number" id="fToGom" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
+      </label>
+      <label class="f" id="fTaxWrap" hidden><span id="fTaxLabel">Taxa de importação (opcional)</span>
+        <input type="number" id="fTax" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
+      </label>
+      <label class="f">Frete da GOM até você (R$)
         <input type="number" id="fShip" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
       </label>
       <div class="f" aria-live="polite"><span>Total</span><span class="num" id="fTotal" style="font-size:1.05rem;color:var(--fg);padding:8px 0">R$ 0,00</span></div>
@@ -120,7 +141,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2"></script>
-<script src="app.js?v=2"></script>
+<script src="config.js?v=3"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>

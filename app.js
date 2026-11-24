@@ -28,9 +28,35 @@
   let photoBlob = null, photoPreviewUrl = null;
   const busy = new Set();
 
-  const stage = (c) => (c.arrived ? "col" : c.paid_price && c.paid_shipping ? "arr" : "pay");
-  const total = (c) => cents(Number(c.price) + Number(c.shipping));
-  const due = (c) => cents((c.paid_price ? 0 : Number(c.price)) + (c.paid_shipping ? 0 : Number(c.shipping)));
+  // ---------- categorias de compra ----------
+  // Individual Nacional: 1 frete (GOM → você).
+  // Individual Internacional: frete até a GOM + frete GOM → você + taxa de importação opcional.
+  // CEG Nacional: frete da seller até a GOM (dividido) + frete GOM → você.
+  // CEG Internacional: frete até a GOM e taxa opcional (divididos) + frete GOM → você.
+  // Na CEG, os valores divididos guardam só a parte da pessoa.
+  const isCeg = (t) => t === "ceg";
+  const isIntl = (o) => o === "internacional";
+  const hasToGom = (t, o) => isCeg(t) || isIntl(o);
+  const KIND_NAME = { individual: "Individual", ceg: "CEG" };
+  const kindLabel = (c) => `${KIND_NAME[c.purchase_type] || "Individual"} ${isIntl(c.origin) ? "Internacional" : "Nacional"}`;
+  function toGomLabel(t, o) {
+    if (!isCeg(t)) return "Frete do país de origem até a GOM";
+    return isIntl(o) ? "Frete internacional até a GOM · sua parte" : "Frete da seller até a GOM · sua parte";
+  }
+  const taxLabel = (t) => (isCeg(t) ? "Taxa de importação · sua parte" : "Taxa de importação");
+
+  // partes que compõem o valor de um card, cada uma com o seu "pago"
+  function parts(c) {
+    const p = [{ key: "price", paid: "paid_price", label: "Preço", check: "Preço pago" }];
+    if (hasToGom(c.purchase_type, c.origin)) p.push({ key: "shipping_to_gom", paid: "paid_shipping_to_gom", label: "Frete até a GOM", check: "Frete até a GOM pago" });
+    if (isIntl(c.origin) && Number(c.import_tax) > 0) p.push({ key: "import_tax", paid: "paid_tax", label: "Taxa de importação", check: "Taxa paga" });
+    p.push({ key: "shipping", paid: "paid_shipping", label: "Frete até você", check: "Frete até você pago" });
+    return p;
+  }
+  const allPaid = (c) => parts(c).every((x) => c[x.paid]);
+  const stage = (c) => (c.arrived ? "col" : allPaid(c) ? "arr" : "pay");
+  const total = (c) => cents(parts(c).reduce((s, x) => s + (Number(c[x.key]) || 0), 0));
+  const due = (c) => cents(parts(c).reduce((s, x) => s + (c[x.paid] ? 0 : Number(c[x.key]) || 0), 0));
 
   function toast(msg) {
     const t = $("toast"); t.textContent = msg; t.hidden = false;
@@ -138,9 +164,40 @@
   }
 
   // ---------- formulário ----------
-  function updateFormTotal() { $("fTotal").textContent = money(cents($("fPrice").value) + cents($("fShip").value)); }
-  $("fPrice").addEventListener("input", updateFormTotal);
-  $("fShip").addEventListener("input", updateFormTotal);
+  const radio = (name) => (document.querySelector(`input[name=${name}]:checked`) || {}).value;
+  const setRadio = (name, v) => document.querySelectorAll(`input[name=${name}]`).forEach((r) => (r.checked = r.value === v));
+  // valores do formulário; campos escondidos pela categoria contam como zero
+  function formValues() {
+    const purchase_type = radio("fType") || "individual", origin = radio("fOrigin") || "nacional";
+    return {
+      purchase_type, origin,
+      price: cents($("fPrice").value),
+      shipping_to_gom: hasToGom(purchase_type, origin) ? cents($("fToGom").value) : 0,
+      import_tax: isIntl(origin) ? cents($("fTax").value) : 0,
+      shipping: cents($("fShip").value),
+    };
+  }
+  const HINT = {
+    "individual-nacional": "Só o frete da GOM até você.",
+    "individual-internacional": "Dois fretes: do país de origem até a GOM e da GOM até você. A taxa de importação é opcional e pode ser adicionada depois, em Editar.",
+    "ceg-nacional": "O frete da seller até a GOM é dividido: informe só a sua parte. O frete da GOM até você é só seu.",
+    "ceg-internacional": "O frete até a GOM e as taxas são divididos conforme as regras da GOM: informe só a sua parte. O frete da GOM até você é só seu.",
+  };
+  function updateKindFields() {
+    const t = radio("fType") || "individual", o = radio("fOrigin") || "nacional";
+    $("fToGomWrap").hidden = !hasToGom(t, o);
+    $("fToGomLabel").textContent = toGomLabel(t, o) + " (R$)";
+    $("fTaxWrap").hidden = !isIntl(o);
+    $("fTaxLabel").textContent = taxLabel(t) + " (opcional)";
+    $("fHint").textContent = HINT[t + "-" + o];
+    updateFormTotal();
+  }
+  function updateFormTotal() {
+    const v = formValues();
+    $("fTotal").textContent = money(v.price + v.shipping_to_gom + v.import_tax + v.shipping);
+  }
+  ["fPrice", "fToGom", "fTax", "fShip"].forEach((id) => $(id).addEventListener("input", updateFormTotal));
+  document.querySelectorAll("input[name=fType], input[name=fOrigin]").forEach((r) => r.addEventListener("change", updateKindFields));
 
   async function shrink(file) {
     const url = URL.createObjectURL(file);
@@ -181,9 +238,13 @@
     editing = c;
     $("fName").value = c.name;
     $("fSeller").value = c.seller || "";
+    setRadio("fType", c.purchase_type || "individual");
+    setRadio("fOrigin", c.origin || "nacional");
     $("fPrice").value = Number(c.price);
+    $("fToGom").value = Number(c.shipping_to_gom) || "";
+    $("fTax").value = Number(c.import_tax) || "";
     $("fShip").value = Number(c.shipping);
-    updateFormTotal();
+    updateKindFields();
     const src = c.image_path && photoUrls.get(c.image_path);
     if (src) showPhoto(src);
     formLabels();
@@ -193,7 +254,7 @@
   $("fCancel").addEventListener("click", () => resetForm());
   function resetForm() {
     editing = null; formLabels();
-    $("addForm").reset(); updateFormTotal(); photoBlob = null;
+    $("addForm").reset(); updateKindFields(); photoBlob = null;
     const img = $("drop").querySelector("img"); if (img) img.remove();
     if (photoPreviewUrl) { URL.revokeObjectURL(photoPreviewUrl); photoPreviewUrl = null; }
     $("dropText").hidden = false;
@@ -214,7 +275,7 @@
         if (error) { path = null; toast(target ? "A nova foto não foi enviada." : "A foto não foi enviada, mas o card será salvo sem ela."); }
       }
       const photoFailed = !!photoBlob && !path;
-      const values = { name, seller: $("fSeller").value.trim() || null, price: cents($("fPrice").value), shipping: cents($("fShip").value) };
+      const values = { name, seller: $("fSeller").value.trim() || null, ...formValues() };
       if (target) {
         // edição: mantém os pagamentos e a aba do card; a foto só muda se uma nova foi enviada
         if (path) values.image_path = path;
@@ -222,10 +283,12 @@
         const { data, error } = await sb.from("cards").update(values).eq("id", target.id).select().single();
         if (error) throw error;
         if (path && oldPath) sb.storage.from(BUCKET).remove([oldPath]);
+        const wasStage = stage(target);
         Object.assign(target, data);
+        const backToPay = wasStage === "arr" && stage(target) === "pay";
         if (path && photoPreviewUrl) photoUrls.set(path, photoPreviewUrl), (photoPreviewUrl = null);
         resetForm();
-        toast(photoFailed ? "Dados salvos, mas a nova foto não foi enviada." : "Alterações salvas.");
+        toast(photoFailed ? "Dados salvos, mas a nova foto não foi enviada." : backToPay ? "Alterações salvas. O card voltou para Pagamento." : "Alterações salvas.");
         render();
         return;
       }
@@ -306,9 +369,8 @@
     return box;
   }
   function moneyBlock(c) {
-    return el("div", { class: "money" },
-      el("span", { text: "Preço" }), el("span", { class: "num", text: money(c.price) }),
-      el("span", { text: "Frete" }), el("span", { class: "num", text: money(c.shipping) }),
+    const lines = parts(c).flatMap((x) => [el("span", { text: x.label }), el("span", { class: "num", text: money(c[x.key]) })]);
+    return el("div", { class: "money" }, ...lines,
       el("span", { class: "tot", text: "Total" }), el("span", { class: "num tot", text: money(total(c)) }));
   }
   function check(label, on, fn) {
@@ -329,6 +391,7 @@
   }
   const infoBlock = (c) => el("div", { class: "info" },
     el("span", { class: "title", text: c.name }),
+    el("span", { class: "tag", text: kindLabel(c) }),
     c.seller ? el("span", { class: "from" }, document.createTextNode("Vendedor: "), el("b", { text: c.seller })) : null,
     moneyBlock(c));
 
@@ -344,8 +407,7 @@
   function rowPay(c) {
     const status = el("div", { class: "status" },
       el("div", { class: "checks" },
-        check("Preço pago", c.paid_price, (v) => patch(c, { paid_price: v }, v && c.paid_shipping ? "Tudo pago! Foi para Chegada." : null)),
-        check("Frete pago", c.paid_shipping, (v) => patch(c, { paid_shipping: v }, v && c.paid_price ? "Tudo pago! Foi para Chegada." : null))),
+        ...parts(c).map((x) => check(x.check, c[x.paid], (v) => patch(c, { [x.paid]: v }, v && allPaid({ ...c, [x.paid]: v }) ? "Tudo pago! Foi para Chegada." : null)))),
       el("span", { class: "pill warn" }, document.createTextNode("Falta pagar "), el("b", { class: "num", text: money(due(c)) })));
     return el("div", { class: "row" }, thumb(c), infoBlock(c), status, deleteControls(c));
   }
@@ -354,7 +416,7 @@
       el("span", { class: "pill ok", text: "Pago integralmente" }),
       el("div", { class: "checks" },
         el("button", { class: "btn-ok", type: "button", text: "Chegou ✓", onclick: () => patch(c, { arrived: true, arrived_at: new Date().toISOString() }, "Foi para a Coleção!") }),
-        el("button", { class: "icon-btn", type: "button", text: "Voltar p/ pagamento", onclick: () => patch(c, { paid_price: false, paid_shipping: false }) })));
+        el("button", { class: "icon-btn", type: "button", text: "Voltar p/ pagamento", onclick: () => patch(c, { paid_price: false, paid_shipping: false, paid_shipping_to_gom: false, paid_tax: false }) })));
     return el("div", { class: "row" }, thumb(c), infoBlock(c), status, deleteControls(c));
   }
   function rowCol(c) {
@@ -367,8 +429,8 @@
 
   const HEAD = { pay: "Pagamento", arr: "Chegada", col: "Status" };
   const EMPTY = {
-    pay: ["Nada pendente de pagamento", "Cadastre um photocard acima. Ele aparece aqui até preço e frete estarem pagos."],
-    arr: ["Nenhum card a caminho", "Quando preço e frete estiverem pagos, o card vem para cá esperando chegar."],
+    pay: ["Nada pendente de pagamento", "Cadastre um photocard acima. Ele aparece aqui até o preço, os fretes e as taxas estarem pagos."],
+    arr: ["Nenhum card a caminho", "Quando tudo estiver pago, o card vem para cá esperando chegar."],
     col: ["Sua coleção está vazia", "Cards marcados como \"Chegou\" ficam guardados aqui."],
   };
   const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
@@ -384,7 +446,7 @@
     const n = cards.length + archived.count;
     const quit = groups.arr.length + groups.col.length;
     $("sTotal").textContent = money(all);
-    $("sTotalSub").textContent = plural(n, "card", "cards") + (archived.count ? ` · inclui ${archived.count} de coleções apagadas` : " · preço + frete");
+    $("sTotalSub").textContent = plural(n, "card", "cards") + (archived.count ? ` · inclui ${archived.count} de coleções apagadas` : " · preço, fretes e taxas");
     $("sPaid").textContent = money(all - dueSum);
     $("sPaidSub").textContent = plural(quit, "quitado", "quitados");
     $("sDue").textContent = money(dueSum);
@@ -423,5 +485,6 @@
   }
 
   setMode("login");
+  updateKindFields();
   sb.auth.getSession().then(({ data }) => { if (!data.session) show("authView"); });
 })();

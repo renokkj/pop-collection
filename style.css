@@ -64,6 +64,17 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
 .form-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .form-btns { display: flex; gap: 8px; }
 form.add.editing { border-color: var(--accent); }
+.kind { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 3px; background: var(--sunken); padding: 3px; border-radius: 9px; width: fit-content; }
+.seg label { position: relative; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: block; padding: 6px 12px; border-radius: 7px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+.seg input:checked + span { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fields .f > input { margin-top: auto; }
+.hint { flex-basis: 100%; margin: 0; font-size: 0.8rem; color: var(--muted); }
+.hint:empty { display: none; }
+.tag { font-size: 0.72rem; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 1px 8px; width: fit-content; }
 .total-preview { font-size: 0.9rem; color: var(--muted); }
 .total-preview b { color: var(--fg); font-family: var(--f-num); font-weight: 500; }
 @media (max-width: 600px) { .fields { grid-template-columns: 1fr 1fr; } .fields .name, .fields .seller { grid-column: 1 / -1; } .tabs button { padding-inline: 6px; gap: 5px; } }
