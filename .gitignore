@@ -1,0 +1,25 @@
+# Supabase CLI (arquivos locais)
+supabase/.temp/
+supabase/.branches/
+
+# Segredos: nunca enviar
+# (config.js fica no repositório: só tem a URL e a chave anon, que são públicas)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependências e logs
+node_modules/
+*.log
+
+# macOS e Windows
+.DS_Store
+Thumbs.db
+
+# Editores e ferramentas
+.vscode/
+.idea/
+*.swp
+.claude/settings.local.json
