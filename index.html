@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Binder de Photocards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+
+<!-- Tela de login / cadastro -->
+<section class="wrap" id="authView" hidden>
+  <div class="auth">
+    <div class="cards-deco" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div>
+      <h1>Binder de Photocards</h1>
+      <p>Controle o pagamento, a chegada e a coleção dos seus photocards.</p>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" data-mode="login" aria-selected="true">Entrar</button>
+      <button type="button" role="tab" data-mode="signup" aria-selected="false">Criar conta</button>
+    </nav>
+    <form id="authForm" autocomplete="on">
+      <label class="f">E-mail
+        <input type="email" id="aEmail" autocomplete="email" required>
+      </label>
+      <label class="f" id="aPassWrap">Senha
+        <input type="password" id="aPass" autocomplete="current-password" minlength="6" required>
+      </label>
+      <div class="msg" id="aMsg" hidden></div>
+      <button class="btn-primary" type="submit" id="aSubmit">Entrar</button>
+      <button class="linkbtn" type="button" id="aForgot">Esqueci minha senha</button>
+    </form>
+  </div>
+</section>
+
+<!-- Tela de nova senha (link do e-mail de recuperação) -->
+<section class="wrap" id="resetView" hidden>
+  <div class="auth">
+    <h1>Nova senha</h1>
+    <form id="resetForm">
+      <label class="f">Nova senha
+        <input type="password" id="rPass" autocomplete="new-password" minlength="6" required>
+      </label>
+      <div class="msg" id="rMsg" hidden></div>
+      <button class="btn-primary" type="submit">Salvar nova senha</button>
+    </form>
+  </div>
+</section>
+
+<!-- App -->
+<div class="wrap" id="appView" hidden>
+  <header>
+    <div>
+      <h1>Binder de Photocards</h1>
+      <p>Cadastre, acompanhe o pagamento e a chegada de cada card.</p>
+    </div>
+    <div class="userbar"><span>Conta: <b id="uEmail"></b></span><button class="btn-ghost" type="button" id="logout">Sair</button></div>
+  </header>
+
+  <div id="notice" class="notice" hidden></div>
+
+  <section class="summary" aria-label="Resumo de gastos">
+    <div class="big"><span class="label">Total gasto com photocards</span><span class="value" id="sTotal">R$ 0,00</span><span class="sub" id="sTotalSub">preço + frete de todos os cards</span></div>
+    <div><span class="label">Já pago</span><span class="value" id="sPaid">R$ 0,00</span><span class="sub" id="sPaidSub">&nbsp;</span></div>
+    <div><span class="label">Falta pagar</span><span class="value" id="sDue">R$ 0,00</span><span class="sub" id="sDueSub">&nbsp;</span></div>
+  </section>
+
+  <form class="add" id="addForm" autocomplete="off">
+    <label class="drop" id="drop" title="Foto opcional">
+      <span id="dropText">+ foto<br>(opcional)</span>
+      <input type="file" id="fPhoto" accept="image/*" aria-label="Foto do photocard (opcional)">
+    </label>
+    <div class="fields">
+      <label class="f name">Nome do photocard
+        <input type="text" id="fName" placeholder="ex.: Jisoo · Born Pink · POB Weverse" required maxlength="120">
+      </label>
+      <label class="f">Preço (R$)
+        <input type="number" id="fPrice" inputmode="decimal" min="0" step="0.01" placeholder="0,00" required>
+      </label>
+      <label class="f">Frete (R$)
+        <input type="number" id="fShip" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
+      </label>
+      <div class="f" aria-live="polite"><span>Total</span><span class="num" id="fTotal" style="font-size:1.05rem;color:var(--fg);padding:8px 0">R$ 0,00</span></div>
+      <div class="form-foot">
+        <span class="total-preview" id="formMsg">O card entra na aba Pagamento.</span>
+        <button class="btn-primary" type="submit" id="fSubmit">Cadastrar photocard</button>
+      </div>
+    </div>
+  </form>
+
+  <nav class="tabs" role="tablist" id="mainTabs">
+    <button type="button" role="tab" data-tab="pay" aria-selected="true">Pagamento <span class="count" id="cPay">0</span></button>
+    <button type="button" role="tab" data-tab="arr" aria-selected="false">Chegada <span class="count" id="cArr">0</span></button>
+    <button type="button" role="tab" data-tab="col" aria-selected="false">Coleção <span class="count" id="cCol">0</span></button>
+  </nav>
+
+  <section class="panel" id="panel"></section>
+</div>
+
+<div class="wrap" id="setupView" hidden>
+  <div class="auth">
+    <h1>Falta configurar</h1>
+    <p>Preencha o arquivo <b>config.js</b> com a URL e a chave anon do seu projeto Supabase. O passo a passo está no README.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
