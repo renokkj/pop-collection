@@ -6,7 +6,7 @@
 <title>Pop Collection</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -56,7 +56,7 @@
   <header>
     <div>
       <h1>Pop Collection</h1>
-      <p>Cadastre, acompanhe o pagamento e a chegada de cada card.</p>
+      <p>Acompanhe o pagamento, a chegada e a coleção dos seus photocards.</p>
     </div>
     <div class="userbar"><span>Conta: <b id="uEmail"></b></span><button class="btn-ghost" type="button" id="logout">Sair</button></div>
   </header>
@@ -69,64 +69,76 @@
     <div><span class="label">Falta pagar</span><span class="value" id="sDue">R$ 0,00</span><span class="sub" id="sDueSub">&nbsp;</span></div>
   </section>
 
-  <form class="add" id="addForm" autocomplete="off">
-    <label class="drop" id="drop" title="Foto opcional">
-      <span id="dropText">+ foto<br>(opcional)</span>
-      <input type="file" id="fPhoto" accept="image/*" aria-label="Foto do photocard (opcional)">
-    </label>
-    <div class="fields">
-      <label class="f name">Nome do photocard
-        <input type="text" id="fName" placeholder="ex.: Jisoo · Born Pink · POB Weverse" required maxlength="120">
-      </label>
-      <label class="f seller">Onde comprou (vendedor)
-        <input type="text" id="fSeller" list="sellerList" placeholder="ex.: GOM, Shopee" maxlength="80">
-        <datalist id="sellerList"></datalist>
-      </label>
-      <div class="kind">
-        <div class="f"><span id="lType">Tipo de compra</span>
-          <div class="seg" role="radiogroup" aria-labelledby="lType">
-            <label><input type="radio" name="fType" value="individual" checked><span>Individual</span></label>
-            <label><input type="radio" name="fType" value="ceg"><span title="Compra em grupo">CEG</span></label>
-          </div>
-        </div>
-        <div class="f"><span id="lOrigin">Origem</span>
-          <div class="seg" role="radiogroup" aria-labelledby="lOrigin">
-            <label><input type="radio" name="fOrigin" value="nacional" checked><span>Nacional</span></label>
-            <label><input type="radio" name="fOrigin" value="internacional"><span>Internacional</span></label>
-          </div>
-        </div>
-        <p class="hint" id="fHint"></p>
-      </div>
-      <label class="f">Preço (R$)
-        <input type="number" id="fPrice" inputmode="decimal" min="0" step="0.01" placeholder="0,00" required>
-      </label>
-      <label class="f" id="fToGomWrap" hidden><span id="fToGomLabel">Frete até a GOM (R$)</span>
-        <input type="number" id="fToGom" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
-      </label>
-      <label class="f" id="fTaxWrap" hidden><span id="fTaxLabel">Taxa de importação (opcional)</span>
-        <input type="number" id="fTax" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
-      </label>
-      <label class="f">Frete da GOM até você (R$)
-        <input type="number" id="fShip" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
-      </label>
-      <div class="f" aria-live="polite"><span>Total</span><span class="num" id="fTotal" style="font-size:1.05rem;color:var(--fg);padding:8px 0">R$ 0,00</span></div>
-      <div class="form-foot">
-        <span class="total-preview" id="formMsg">O card entra na aba Pagamento.</span>
-        <div class="form-btns">
-          <button class="btn-ghost" type="button" id="fCancel" hidden>Cancelar</button>
-          <button class="btn-primary" type="submit" id="fSubmit">Cadastrar photocard</button>
-        </div>
-      </div>
-    </div>
-  </form>
-
-  <nav class="tabs" role="tablist" id="mainTabs">
-    <button type="button" role="tab" data-tab="pay" aria-selected="true">Pagamento <span class="count" id="cPay">0</span></button>
-    <button type="button" role="tab" data-tab="arr" aria-selected="false">Chegada <span class="count" id="cArr">0</span></button>
-    <button type="button" role="tab" data-tab="col" aria-selected="false">Coleção <span class="count" id="cCol">0</span></button>
-  </nav>
+  <div class="bar">
+    <nav class="tabs" role="tablist" id="mainTabs" aria-label="Seções">
+      <button type="button" role="tab" data-tab="pay" aria-selected="true">Pagamento <span class="count" id="cPay">0</span></button>
+      <button type="button" role="tab" data-tab="arr" aria-selected="false">Chegada <span class="count" id="cArr">0</span></button>
+      <button type="button" role="tab" data-tab="col" aria-selected="false">Coleção <span class="count" id="cCol">0</span></button>
+    </nav>
+    <button class="btn-primary btn-add" type="button" id="openAdd" aria-haspopup="dialog">+ Cadastrar Photocard</button>
+  </div>
 
   <section class="panel" id="panel"></section>
+
+  <!-- Cadastro / edição de photocard (abre pelo botão "+ Cadastrar Photocard" ou por Editar) -->
+  <dialog class="sheet" id="addDialog" aria-labelledby="addTitle">
+    <div class="sheet-box">
+      <div class="sheet-head">
+        <h2 id="addTitle">Cadastrar photocard</h2>
+        <button class="icon-btn sheet-close" type="button" id="addClose" aria-label="Fechar">✕</button>
+      </div>
+      <form class="add" id="addForm" autocomplete="off">
+        <label class="drop" id="drop" title="Foto opcional">
+          <span id="dropText">+ foto<br>(opcional)</span>
+          <input type="file" id="fPhoto" accept="image/*" aria-label="Foto do photocard (opcional)">
+        </label>
+        <div class="fields">
+          <label class="f name">Nome do photocard
+            <input type="text" id="fName" placeholder="ex.: Jisoo · Born Pink · POB Weverse" required maxlength="120">
+          </label>
+          <label class="f seller">Onde comprou (vendedor)
+            <input type="text" id="fSeller" list="sellerList" placeholder="ex.: GOM, Shopee" maxlength="80">
+            <datalist id="sellerList"></datalist>
+          </label>
+          <div class="kind">
+            <div class="f"><span id="lType">Tipo de compra</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lType">
+                <label><input type="radio" name="fType" value="individual" checked><span>Individual</span></label>
+                <label><input type="radio" name="fType" value="ceg"><span title="Compra em grupo">CEG</span></label>
+              </div>
+            </div>
+            <div class="f"><span id="lOrigin">Origem</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lOrigin">
+                <label><input type="radio" name="fOrigin" value="nacional" checked><span>Nacional</span></label>
+                <label><input type="radio" name="fOrigin" value="internacional"><span>Internacional</span></label>
+              </div>
+            </div>
+            <p class="hint" id="fHint"></p>
+          </div>
+          <label class="f">Preço (R$)
+            <input type="number" id="fPrice" inputmode="decimal" min="0" step="0.01" placeholder="0,00" required>
+          </label>
+          <label class="f" id="fToGomWrap" hidden><span id="fToGomLabel">Frete até a GOM (R$)</span>
+            <input type="number" id="fToGom" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
+          </label>
+          <label class="f" id="fTaxWrap" hidden><span id="fTaxLabel">Taxa de importação (opcional)</span>
+            <input type="number" id="fTax" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
+          </label>
+          <label class="f">Frete da GOM até você (R$)
+            <input type="number" id="fShip" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
+          </label>
+          <div class="f" aria-live="polite"><span>Total</span><span class="num" id="fTotal" style="font-size:1.05rem;color:var(--fg);padding:8px 0">R$ 0,00</span></div>
+          <div class="form-foot">
+            <span class="total-preview" id="formMsg">O card entra na aba Pagamento.</span>
+            <div class="form-btns">
+              <button class="btn-ghost" type="button" id="fCancel">Cancelar</button>
+              <button class="btn-primary" type="submit" id="fSubmit">Cadastrar photocard</button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </dialog>
 </div>
 
 <div class="wrap" id="setupView" hidden>
@@ -141,7 +153,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=3"></script>
-<script src="app.js?v=3"></script>
+<script src="config.js?v=4"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
