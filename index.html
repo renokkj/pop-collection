@@ -78,6 +78,10 @@
       <label class="f name">Nome do photocard
         <input type="text" id="fName" placeholder="ex.: Jisoo · Born Pink · POB Weverse" required maxlength="120">
       </label>
+      <label class="f seller">Onde comprou (vendedor)
+        <input type="text" id="fSeller" list="sellerList" placeholder="ex.: GOM, Shopee" maxlength="80">
+        <datalist id="sellerList"></datalist>
+      </label>
       <label class="f">Preço (R$)
         <input type="number" id="fPrice" inputmode="decimal" min="0" step="0.01" placeholder="0,00" required>
       </label>

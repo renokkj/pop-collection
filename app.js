@@ -185,7 +185,7 @@
         if (error) { path = null; toast("A foto não foi enviada, mas o card será salvo sem ela."); }
       }
       const { data, error } = await sb.from("cards")
-        .insert({ name, price: cents($("fPrice").value), shipping: cents($("fShip").value), image_path: path })
+        .insert({ name, seller: $("fSeller").value.trim() || null, price: cents($("fPrice").value), shipping: cents($("fShip").value), image_path: path })
         .select().single();
       if (error) throw error;
       if (path && photoPreviewUrl) photoUrls.set(path, photoPreviewUrl), (photoPreviewUrl = null);
@@ -279,7 +279,19 @@
     return el("div", { class: "actions" },
       el("button", { class: "icon-btn", type: "button", text: "Excluir", "aria-label": "Excluir " + c.name, onclick: () => { confirmDelete = c.id; render(); } }));
   }
-  const infoBlock = (c) => el("div", { class: "info" }, el("span", { class: "title", text: c.name }), moneyBlock(c));
+  const infoBlock = (c) => el("div", { class: "info" },
+    el("span", { class: "title", text: c.name }),
+    c.seller ? el("span", { class: "from" }, document.createTextNode("Vendedor: "), el("b", { text: c.seller })) : null,
+    moneyBlock(c));
+
+  // sugestões do campo "Onde comprou": lojas comuns + vendedores que a pessoa já usou
+  const COMMON_SELLERS = ["GOM", "Shopee", "Mercado Livre", "Instagram", "X (Twitter)", "Weverse Shop", "Ktown4u", "AliExpress", "Amazon", "Vinted"];
+  function updateSellerList() {
+    const seen = new Map();
+    cards.forEach((c) => { if (c.seller) seen.set(c.seller.toLowerCase(), c.seller); });
+    COMMON_SELLERS.forEach((s) => { if (!seen.has(s.toLowerCase())) seen.set(s.toLowerCase(), s); });
+    $("sellerList").replaceChildren(...[...seen.values()].map((v) => el("option", { value: v })));
+  }
 
   function rowPay(c) {
     const status = el("div", { class: "status" },
@@ -314,6 +326,7 @@
   const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
 
   function render() {
+    updateSellerList();
     const groups = { pay: [], arr: [], col: [] };
     cards.forEach((c) => groups[stage(c)].push(c));
 

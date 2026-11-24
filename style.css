@@ -57,14 +57,14 @@ form.add { background: var(--surface); border: 1px solid var(--line); border-rad
 .drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px 12px; align-content: start; min-width: 0; }
-.fields .name { grid-column: 1 / -1; }
-label.f { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 600; color: var(--muted); min-width: 0; }
+.fields .name { grid-column: span 2; }
+.f { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 600; color: var(--muted); min-width: 0; }
 input[type=text], input[type=number] { font: inherit; font-size: 0.95rem; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; min-width: 0; }
 input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .form-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .total-preview { font-size: 0.9rem; color: var(--muted); }
 .total-preview b { color: var(--fg); font-family: var(--f-num); font-weight: 500; }
-@media (max-width: 600px) { .fields { grid-template-columns: 1fr 1fr; } .fields .name { grid-column: 1 / -1; } }
+@media (max-width: 600px) { .fields { grid-template-columns: 1fr 1fr; } .fields .name, .fields .seller { grid-column: 1 / -1; } .tabs button { padding-inline: 6px; gap: 5px; } }
 
 button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid transparent; padding: 8px 14px; font-weight: 600; font-size: 0.88rem; }
 .btn-primary { background: var(--accent); color: var(--surface); }
@@ -97,6 +97,8 @@ button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid t
 .thumb span { opacity: .55; }
 .info { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .info .title { font-weight: 600; overflow-wrap: anywhere; }
+.info .from { font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
+.info .from b { color: var(--accent); font-weight: 600; }
 .money { display: grid; grid-template-columns: auto auto; justify-content: start; gap: 0 10px; font-size: 0.82rem; color: var(--muted); }
 .money .num { color: var(--fg); text-align: right; }
 .money .tot { font-weight: 600; color: var(--fg); }

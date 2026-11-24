@@ -7,6 +7,7 @@ create table if not exists public.cards (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null default auth.uid() references auth.users (id) on delete cascade,
   name          text not null check (char_length(name) between 1 and 120),
+  seller        text check (char_length(seller) <= 80),
   price         numeric(10,2) not null default 0 check (price >= 0),
   shipping      numeric(10,2) not null default 0 check (shipping >= 0),
   paid_price    boolean not null default false,
@@ -16,6 +17,9 @@ create table if not exists public.cards (
   image_path    text,
   created_at    timestamptz not null default now()
 );
+-- Para quem já tinha rodado uma versão anterior deste arquivo:
+alter table public.cards add column if not exists seller text check (char_length(seller) <= 80);
+
 create index if not exists cards_user_idx on public.cards (user_id, created_at desc);
 
 -- 2) Total já gasto com coleções apagadas (para o "total gasto" não zerar)
