@@ -128,7 +128,7 @@
     if (event === "PASSWORD_RECOVERY") { user = session?.user || null; show("resetView"); return; }
     const next = session?.user || null;
     if (next && (!user || user.id !== next.id)) { user = next; enterApp(); }
-    else if (!next) { user = null; cards = []; photoUrls = new Map(); resetForm(); setMode("login"); show("authView"); }
+    else if (!next) { user = null; cards = []; photoUrls = new Map(); saving = false; closeForm(); resetForm(); setMode("login"); show("authView"); }
   });
 
   function enterApp() {
@@ -229,9 +229,26 @@
   function formLabels() {
     $("fSubmit").textContent = editing ? "Salvar alterações" : "Cadastrar photocard";
     $("formMsg").textContent = editing ? "Editando: " + editing.name : "O card entra na aba Pagamento.";
-    $("fCancel").hidden = !editing;
+    $("addTitle").textContent = editing ? "Editar photocard" : "Cadastrar photocard";
     $("addForm").classList.toggle("editing", !!editing);
   }
+
+  // ---------- janela do formulário ----------
+  const dlg = $("addDialog");
+  function openForm() {
+    if (!dlg.open) dlg.showModal();
+    $("fName").focus();
+  }
+  // fechar mantém o rascunho de um card novo; uma edição é descartada
+  function closeForm() {
+    if (saving) return;
+    if (dlg.open) dlg.close();
+  }
+  dlg.addEventListener("close", () => { if (editing) resetForm(); });
+  dlg.addEventListener("cancel", (e) => { if (saving) e.preventDefault(); }); // tecla Esc
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) closeForm(); }); // clique fora da janela
+  $("addClose").addEventListener("click", closeForm);
+  $("openAdd").addEventListener("click", () => { if (editing) resetForm(); openForm(); });
   function startEdit(c) {
     if (saving) return;
     resetForm();
@@ -248,10 +265,9 @@
     const src = c.image_path && photoUrls.get(c.image_path);
     if (src) showPhoto(src);
     formLabels();
-    $("addForm").scrollIntoView({ block: "start" });
-    $("fName").focus({ preventScroll: true });
+    openForm();
   }
-  $("fCancel").addEventListener("click", () => resetForm());
+  $("fCancel").addEventListener("click", closeForm);
   function resetForm() {
     editing = null; formLabels();
     $("addForm").reset(); updateKindFields(); photoBlob = null;
@@ -287,7 +303,7 @@
         Object.assign(target, data);
         const backToPay = wasStage === "arr" && stage(target) === "pay";
         if (path && photoPreviewUrl) photoUrls.set(path, photoPreviewUrl), (photoPreviewUrl = null);
-        resetForm();
+        saving = false; resetForm(); closeForm();
         toast(photoFailed ? "Dados salvos, mas a nova foto não foi enviada." : backToPay ? "Alterações salvas. O card voltou para Pagamento." : "Alterações salvas.");
         render();
         return;
@@ -296,7 +312,7 @@
       if (error) throw error;
       if (path && photoPreviewUrl) photoUrls.set(path, photoPreviewUrl), (photoPreviewUrl = null);
       cards.unshift(data);
-      resetForm();
+      saving = false; resetForm(); closeForm();
       toast("Photocard cadastrado em Pagamento.");
       tab = "pay"; render();
       signPhotos().then(render);
@@ -334,7 +350,7 @@
     if (error) { toast("Não foi possível apagar."); return; }
     if (c.image_path) sb.storage.from(BUCKET).remove([c.image_path]);
     cards = cards.filter((x) => x.id !== c.id);
-    if (editing && editing.id === c.id) resetForm();
+    if (editing && editing.id === c.id) { resetForm(); closeForm(); }
     toast("Card apagado.");
     render();
   }
@@ -344,7 +360,7 @@
     clearing = false; confirmClear = false;
     if (error) { toast("Não foi possível apagar a coleção. Tente de novo."); render(); return; }
     if (paths && paths.length) sb.storage.from(BUCKET).remove(paths);
-    if (editing && editing.arrived) resetForm();
+    if (editing && editing.arrived) { resetForm(); closeForm(); }
     toast("Coleção apagada. O valor continua no total gasto.");
     await loadAll();
   }
@@ -429,7 +445,7 @@
 
   const HEAD = { pay: "Pagamento", arr: "Chegada", col: "Status" };
   const EMPTY = {
-    pay: ["Nada pendente de pagamento", "Cadastre um photocard acima. Ele aparece aqui até o preço, os fretes e as taxas estarem pagos."],
+    pay: ["Nada pendente de pagamento", "Use o botão \"+ Cadastrar Photocard\". O card aparece aqui até o preço, os fretes e as taxas estarem pagos."],
     arr: ["Nenhum card a caminho", "Quando tudo estiver pago, o card vem para cá esperando chegar."],
     col: ["Sua coleção está vazia", "Cards marcados como \"Chegou\" ficam guardados aqui."],
   };

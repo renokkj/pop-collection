@@ -63,6 +63,7 @@ input[type=text], input[type=number] { font: inherit; font-size: 0.95rem; color:
 input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .form-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .form-btns { display: flex; gap: 8px; }
+.form-btns button { white-space: nowrap; }
 form.add.editing { border-color: var(--accent); }
 .kind { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; }
 .seg { display: inline-flex; flex-wrap: wrap; gap: 3px; background: var(--sunken); padding: 3px; border-radius: 9px; width: fit-content; }
@@ -96,6 +97,38 @@ button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid t
 .tabs button[aria-selected=true] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .count { font-family: var(--f-num); font-size: 0.75rem; background: var(--bg); border-radius: 99px; padding: 1px 7px; }
 .tabs button[aria-selected=true] .count { background: var(--accent-soft); color: var(--accent); }
+
+/* barra das seções + botão de cadastro */
+.bar { display: flex; align-items: center; gap: 12px; }
+.bar .tabs { flex: 1; min-width: 0; }
+.btn-add { white-space: nowrap; padding: 10px 18px; font-size: 0.92rem; box-shadow: 0 2px 8px rgba(91,63,214,.25); }
+.btn-add:hover { filter: brightness(1.06); }
+@media (max-width: 600px) {
+  /* no celular o botão fica fixo embaixo, ao alcance do polegar */
+  .btn-add { position: fixed; z-index: 10; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); border-radius: 99px; padding: 13px 20px; box-shadow: 0 6px 20px rgba(0,0,0,.22); }
+  #appView { padding-bottom: 96px; }
+  .toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* janela do cadastro */
+dialog.sheet { border: none; padding: 0; background: transparent; color: var(--fg); width: min(820px, calc(100% - 32px)); max-width: none; max-height: calc(100dvh - 48px); margin: auto; overflow: visible; }
+dialog.sheet::backdrop { background: rgba(20,19,26,.55); }
+.sheet-box { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.sheet-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 12px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.sheet-close { font-size: 1rem; line-height: 1; padding: 8px 10px; color: var(--muted); }
+.sheet-close:hover { color: var(--fg); background: var(--sunken); }
+.sheet form.add { border: none; border-radius: 0; background: transparent; }
+.sheet form.add.editing { border: none; }
+body:has(dialog.sheet[open]) { overflow: hidden; }
+@media (prefers-reduced-motion: no-preference) {
+  dialog.sheet[open] .sheet-box { animation: sheet-in .2s ease both; }
+  @keyframes sheet-in { from { opacity: 0; transform: translateY(12px); } }
+}
+@media (max-width: 600px) {
+  /* no celular a janela sobe de baixo e ocupa a largura toda */
+  dialog.sheet { width: 100%; max-height: calc(100dvh - 24px); margin: auto 0 0; }
+  .sheet-box { max-height: calc(100dvh - 24px); border-radius: 16px 16px 0 0; border-bottom: none; padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
 
 /* tabela */
 .panel { display: flex; flex-direction: column; gap: 12px; }
