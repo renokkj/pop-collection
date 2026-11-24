@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🎴 Binder de Photocards
+# 🎴 Pop Collection
 
 Controle os pagamentos, a chegada e a coleção dos seus photocards.
 
-[![Abrir o app](https://img.shields.io/badge/abrir_o_app-5b3fd6?style=for-the-badge)](https://renokkj.github.io/PC-Collection/)
+[![Abrir o app](https://img.shields.io/badge/abrir_o_app-5b3fd6?style=for-the-badge)](https://renokkj.github.io/pop-collection/)
 
 ![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6)
@@ -18,6 +18,7 @@ Controle os pagamentos, a chegada e a coleção dos seus photocards.
 
 - 👤 **Contas individuais:** cada pessoa só vê os próprios cards.
 - 📷 **Cadastro com foto:** nome, vendedor, preço e frete. A foto e o vendedor são opcionais.
+- ✏️ **Edição:** corrija nome, vendedor, valores ou foto depois do cadastro.
 - 💸 **Controle financeiro:** mostra o total gasto, o que já foi pago e o que falta pagar.
 - 📦 **Chegada:** separa os cards quitados que ainda estão a caminho.
 - 🌗 **Tema claro e escuro**, conforme o dispositivo.
@@ -63,8 +64,8 @@ flowchart LR
 ## 💻 Rodar no computador
 
 ```bash
-git clone https://github.com/renokkj/PC-Collection.git
-cd PC-Collection
+git clone https://github.com/renokkj/pop-collection.git
+cd pop-collection
 python3 -m http.server 8000
 ```
 
