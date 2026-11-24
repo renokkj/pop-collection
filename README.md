@@ -12,7 +12,18 @@ Controle os pagamentos, a chegada e a coleção dos seus photocards.
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
 ![GitHub Pages](https://img.shields.io/badge/GitHub_Pages-222222?logo=githubpages&logoColor=white)
 
+<br>
+
+<img src="docs/tela-computador.png" alt="Tela inicial do Pop Collection no computador" width="68%">&nbsp;
+<img src="docs/tela-celular.png" alt="Tela inicial do Pop Collection no celular" width="24%">
+
+<sub>Telas com dados de teste.</sub>
+
 </div>
+
+## Sobre o projeto
+
+Criei o Pop Collection para resolver um problema meu: acompanhar quanto já paguei, o que falta pagar e quais photocards ainda estão a caminho. Foi o primeiro projeto que idealizei do zero, da ideia ao app publicado.
 
 ## O que o app faz
 
