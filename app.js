@@ -268,17 +268,11 @@
     e.price.addEventListener("input", updateFormTotal);
     e.fees = feeInputs(updateFormTotal);
     e.file = el("input", { type: "file", accept: "image/*", "aria-label": "Foto do photocard (opcional)" });
-    e.dropText = el("span", {}, "+ foto", el("br"), "(opcional)");
+    e.dropText = el("span", {}, "+ foto", el("br"), "(opcional)", ...(PASTE_KEY ? [el("small", { class: "paste-tip", text: `ou ${PASTE_KEY}` })] : []));
     e.drop = el("label", { class: "drop", title: "Foto opcional" }, e.dropText, e.file);
-    e.file.addEventListener("change", async () => {
+    e.file.addEventListener("change", () => {
       const file = e.file.files && e.file.files[0];
-      if (!file) return;
-      try {
-        e.photoBlob = await shrink(file);
-        if (e.previewUrl) URL.revokeObjectURL(e.previewUrl);
-        e.previewUrl = URL.createObjectURL(e.photoBlob);
-        showPhoto(e, e.previewUrl);
-      } catch (err) { e.photoBlob = null; toast("Não deu para ler essa imagem. Tente um JPG ou PNG."); }
+      if (file) setPhoto(e, file);
     });
     e.num = el("span", { class: "entry-n" });
     e.removeBtn = el("button", { class: "icon-btn", type: "button", text: "Remover", onclick: () => removeEntry(e) });
@@ -290,6 +284,25 @@
         (e.priceWrap = el("label", { class: "f" }, "Preço (R$)", e.price)),
         ...e.fees.nodes));
     return e;
+  }
+  async function setPhoto(e, file) {
+    try {
+      e.photoBlob = await shrink(file);
+      if (e.previewUrl) URL.revokeObjectURL(e.previewUrl);
+      e.previewUrl = URL.createObjectURL(e.photoBlob);
+      showPhoto(e, e.previewUrl);
+    } catch (err) { e.photoBlob = null; toast("Não deu para ler essa imagem. Tente um JPG ou PNG."); }
+  }
+  // Ctrl+V / Cmd+V com uma imagem copiada: vai para o card em que a pessoa está
+  // (o campo com o cursor ou o último em que clicou); sem isso, para o primeiro card sem foto.
+  const PASTE_KEY = matchMedia("(hover: hover) and (pointer: fine)").matches ? (/Mac|iPhone|iPad/.test(navigator.platform) ? "Cmd+V" : "Ctrl+V") : "";
+  let lastEntry = null;
+  $("entries").addEventListener("focusin", (ev) => { lastEntry = entries.find((x) => x.node.contains(ev.target)) || lastEntry; });
+  $("entries").addEventListener("pointerdown", (ev) => { lastEntry = entries.find((x) => x.node.contains(ev.target)) || lastEntry; });
+  function pastedImage(ev) {
+    const items = [...((ev.clipboardData && ev.clipboardData.items) || [])];
+    const it = items.find((i) => i.kind === "file" && /^image\//.test(i.type));
+    return it ? it.getAsFile() : null;
   }
   function showPhoto(e, src) {
     let img = e.drop.querySelector("img");
@@ -388,6 +401,13 @@
 
   // ---------- janela do formulário ----------
   const dlg = $("addDialog");
+  dlg.addEventListener("paste", (ev) => {
+    const file = pastedImage(ev);
+    if (!file || !entries.length) return;
+    ev.preventDefault();
+    const target = (entries.includes(lastEntry) && lastEntry) || entries.find((x) => !x.photoBlob && !x.drop.querySelector("img")) || entries[entries.length - 1];
+    setPhoto(target, file);
+  });
   function openForm() {
     fillGroupSelect();
     updateKindFields();

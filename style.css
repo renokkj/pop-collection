@@ -72,6 +72,7 @@ fieldset.gfees .fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .drop:hover, .drop:focus-within { border-color: var(--accent); color: var(--accent); }
 .drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.drop .paste-tip { display: block; margin-top: 4px; font-size: 0.66rem; opacity: .8; }
 .fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px 12px; align-content: start; min-width: 0; }
 .fields .name { grid-column: span 2; }
 .f { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 600; color: var(--muted); min-width: 0; }
