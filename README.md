@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎴 Pop Collection
+# Pop Collection
 
 Controle os pagamentos, a chegada e a coleção dos seus photocards.
 
@@ -14,16 +14,16 @@ Controle os pagamentos, a chegada e a coleção dos seus photocards.
 
 </div>
 
-## ✨ O que o app faz
+## O que o app faz
 
-- 👤 **Contas individuais:** cada pessoa só vê os próprios cards.
-- 📷 **Cadastro com foto:** nome, vendedor, preço e frete. A foto e o vendedor são opcionais.
-- ✏️ **Edição:** corrija nome, vendedor, valores ou foto depois do cadastro.
-- 💸 **Controle financeiro:** mostra o total gasto, o que já foi pago e o que falta pagar.
-- 📦 **Chegada:** separa os cards quitados que ainda estão a caminho.
-- 🌗 **Tema claro e escuro**, conforme o dispositivo.
+- **Contas individuais:** cada pessoa só vê os próprios cards.
+- **Cadastro com foto:** nome, vendedor, preço e frete. A foto e o vendedor são opcionais.
+- **Edição:** corrija nome, vendedor, valores ou foto depois do cadastro.
+- **Controle financeiro:** mostra o total gasto, o que já foi pago e o que falta pagar.
+- **Chegada:** separa os cards quitados que ainda estão a caminho.
+- **Tema claro e escuro**, conforme o dispositivo.
 
-## 🔄 Como funciona
+## Como funciona
 
 ```mermaid
 flowchart LR
@@ -37,7 +37,7 @@ flowchart LR
 3. **Chegada:** com tudo pago, o card vem para cá. Quando receber, clique em "Chegou ✓".
 4. **Coleção:** guarda os cards recebidos. "Apagar coleção" remove esses cards e suas fotos, mas mantém o valor no total gasto.
 
-## 🛠️ Tecnologias
+## Tecnologias
 
 | Parte | Tecnologia |
 | --- | --- |
@@ -45,13 +45,13 @@ flowchart LR
 | Hospedagem | GitHub Pages (branch `main`, pasta `/ (root)`) |
 | Contas, banco e fotos | [Supabase](https://supabase.com), na região São Paulo |
 
-## 🔒 Segurança
+## Segurança
 
 - As regras de acesso (RLS) do [`schema.sql`](supabase/schema.sql) limitam cada pessoa aos próprios dados.
 - O bucket de fotos é privado, e as fotos são exibidas por links temporários.
 - A chave `anon` do [`config.js`](config.js) pode ser pública. **Nunca** coloque a `service_role` no repositório.
 
-## 📁 Arquivos
+## Arquivos
 
 | Arquivo | O que faz |
 | --- | --- |
@@ -61,7 +61,7 @@ flowchart LR
 | [`config.js`](config.js) | URL e chave `anon` do Supabase |
 | [`supabase/schema.sql`](supabase/schema.sql) | Tabelas, regras de segurança e bucket de fotos |
 
-## 💻 Rodar no computador
+## Rodar no computador
 
 ```bash
 git clone https://github.com/renokkj/pop-collection.git
@@ -74,7 +74,7 @@ Depois, abra http://localhost:8000.
 > O `config.js` deste repositório aponta para o banco do app publicado. Para testar com seus próprios dados, siga o passo a passo abaixo.
 
 <details>
-<summary><b>🚀 Publicar a sua própria versão</b></summary>
+<summary><b>Publicar a sua própria versão</b></summary>
 
 ### 1. Criar o projeto no Supabase
 
