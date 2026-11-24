@@ -14,8 +14,8 @@ Controle os pagamentos, a chegada e a coleção dos seus photocards.
 
 <br>
 
-<img src="docs/tela-computador.png" alt="Tela inicial do Pop Collection no computador" width="68%">&nbsp;
-<img src="docs/tela-celular.png" alt="Tela inicial do Pop Collection no celular" width="24%">
+<img src="docs/inicio-computador.png" alt="Tela inicial do Pop Collection no computador" width="68%">&nbsp;
+<img src="docs/inicio-celular.png" alt="Tela inicial do Pop Collection no celular" width="24%">
 
 <sub>Telas com dados de teste.</sub>
 
