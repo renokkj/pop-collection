@@ -419,7 +419,8 @@
     if (saving) return;
     if (dlg.open) dlg.close();
   }
-  dlg.addEventListener("close", () => { if (editing) resetForm(); });
+  // fechar sem salvar (Cancelar, ✕, Esc ou clique fora) descarta o que foi digitado
+  dlg.addEventListener("close", () => { if (!saving) resetForm(); });
   dlg.addEventListener("cancel", (e) => { if (saving) e.preventDefault(); }); // tecla Esc
   dlg.addEventListener("click", (e) => { if (e.target === dlg) closeForm(); }); // clique fora da janela
   $("addClose").addEventListener("click", closeForm);
