@@ -30,7 +30,7 @@
   let loading = true, confirmClear = false, confirmDelete = null, clearing = false;
   let editing = null, saving = false; // card em edição no formulário
   const busy = new Set();
-  const expanded = new Set(); // grupos abertos (mostrando os cards) nas abas
+  let gDetailId = null; // grupo aberto na janela do grupo
 
   // ---------- categorias de compra ----------
   // Individual Nacional: 1 frete (GOM → você).
@@ -549,7 +549,7 @@
   function openGroups() { showGroupList(); if (!gdlg.open) gdlg.showModal(); }
   function closeGroups() { if (!gSaving && gdlg.open) gdlg.close(); }
   function showGroupList() {
-    gEditing = null;
+    gEditing = null; gDetailId = null;
     $("gListView").hidden = false; $("gForm").hidden = true; $("gDetailView").hidden = true; $("gBack").hidden = true;
     $("gTitle").textContent = "Grupos";
     renderGroupList();
@@ -569,45 +569,47 @@
           el("span", { class: "tag", text: kindLabel(g) }),
           el("span", { class: "from" }, document.createTextNode(plural(m.length, "card", "cards") + " · "), el("b", { class: "num", text: money(groupTotal(g)) }))),
         el("div", { class: "gitem-btns" },
-          el("button", { class: "btn-ghost", type: "button", text: "Ver", "aria-label": "Ver os cards do grupo " + g.name, onclick: () => showGroupDetail(g) }),
+          el("button", { class: "btn-ghost", type: "button", text: "Ver", "aria-label": "Ver os cards do grupo " + g.name, onclick: () => openGroupDetail(g, true) }),
           el("button", { class: "btn-ghost", type: "button", text: "Editar", "aria-label": "Editar o grupo " + g.name, onclick: () => openGroupForm(g, true) })));
     }));
   }
-  // "Ver": mostra os valores do grupo e as informações de cada card dele, em qualquer aba
-  function showGroupDetail(g) {
+  // janela do grupo: abre ao clicar no grupo nas abas ou em "Ver" no botão Grupos.
+  // Mostra os valores do grupo, os fretes e a taxa para marcar como pagos e cada card
+  // com as mesmas ações da aba em que ele está (pagar, chegou, editar, excluir).
+  function openGroupDetail(g, fromList) {
+    showGroupDetail(g, fromList);
+    if (!gdlg.open) gdlg.showModal();
+    $("gDetailView").scrollTop = 0;
+  }
+  function showGroupDetail(g, fromList) {
+    gDetailId = g.id; gEditing = null;
+    if (fromList !== undefined) $("gBack").hidden = !fromList;
     const m = members(g);
-    const count = (st) => m.filter((c) => stage(c) === st).length;
     const d = groupDue(g);
-    const where = [["pay", "em Pagamento"], ["arr", "em Chegada"], ["col", "na Coleção"]].filter(([st]) => count(st)).map(([st, t]) => `${count(st)} ${t}`).join(" · ");
+    const status = el("div", { class: "status" },
+      el("div", { class: "checks" }, ...feeParts(g).map((x) => check(x.check, g[x.paid], (v) => patchGroup(g, { [x.paid]: v })))),
+      d > 0 ? el("span", { class: "pill warn" }, document.createTextNode("Falta pagar no grupo "), el("b", { class: "num", text: money(d) }))
+        : el("span", { class: "pill ok", text: "Grupo pago" }));
     const head = el("div", { class: "gdetail-head" }, stack(m),
-      el("div", { class: "info" },
-        el("span", { class: "tag tag-group", text: "Grupo · " + kindLabel(g) }),
-        groupMoney(g, m),
-        d > 0 ? el("span", { class: "pill warn" }, document.createTextNode("Falta pagar no grupo "), el("b", { class: "num", text: money(d) }))
-          : el("span", { class: "pill ok", text: "Grupo pago" }),
-        where ? el("span", { class: "from", text: where }) : null));
-    const items = m.map((c) => {
-      const st = stage(c);
-      const when = c.arrived_at ? new Date(c.arrived_at).toLocaleDateString("pt-BR") : "";
-      const pill = st === "col" ? el("span", { class: "pill accent", text: when ? "Chegou em " + when : "Na coleção" })
-        : st === "arr" ? el("span", { class: "pill ok", text: c.gift ? "Chegada · presente" : "Chegada · pago" })
-        : el("span", { class: "pill warn", text: c.paid_price ? "Pagamento · faltam os fretes" : "Pagamento · falta o preço" });
-      return el("div", { class: "gitem" }, thumb(c),
-        el("div", { class: "info" },
-          el("span", { class: "title", text: c.name }),
-          c.seller ? el("span", { class: "from" }, document.createTextNode("Vendedor: "), el("b", { text: c.seller })) : null,
-          el("span", { class: "from" }, document.createTextNode("Preço: "), el("b", { class: "num", text: money(c.price) })),
-          pill),
-        el("button", { class: "btn-ghost", type: "button", text: "Editar", "aria-label": "Editar " + c.name, onclick: () => { closeGroups(); startEdit(c); } }));
-    });
+      el("div", { class: "info" }, el("span", { class: "tag tag-group", text: "Grupo · " + kindLabel(g) }), groupMoney(g, m)),
+      status);
+    const sections = [["pay", "Em Pagamento", rowPay], ["arr", "Em Chegada", rowArr], ["col", "Na Coleção", rowCol]].map(([st, name, fn]) => {
+      const list = m.filter((c) => stage(c) === st);
+      if (!list.length) return null;
+      const all = st === "arr" && list.length > 1 ? el("button", { class: "btn-ok", type: "button", text: `Todos os ${list.length} chegaram ✓`,
+        onclick: () => patchMany(list, { arrived: true, arrived_at: new Date().toISOString() }, `${list.length} cards foram para a Coleção!`) }) : null;
+      return el("section", { class: "gsection" },
+        el("div", { class: "gsection-head" }, el("h3", {}, document.createTextNode(name + " "), el("span", { class: "count", text: list.length })), all),
+        el("div", { class: "table" }, ...list.map((c) => fn(c, true))));
+    }).filter(Boolean);
     $("gDetailView").replaceChildren(head,
-      el("div", { class: "gitems" }, ...(items.length ? items : [el("div", { class: "empty" }, el("span", { text: "Nenhum card neste grupo ainda." }))])));
+      ...(sections.length ? sections : [el("div", { class: "empty" }, el("span", { text: "Nenhum card neste grupo ainda. Adicione em Editar, no botão Grupos." }))]));
     $("gTitle").textContent = g.name;
-    $("gListView").hidden = true; $("gForm").hidden = true; $("gDetailView").hidden = false; $("gBack").hidden = false;
+    $("gListView").hidden = true; $("gForm").hidden = true; $("gDetailView").hidden = false;
   }
   function openGroupForm(g, fromList) {
     if (saving) return;
-    gEditing = g || null; gFromList = fromList; gOwnAdded = false;
+    gEditing = g || null; gFromList = fromList; gOwnAdded = false; gDetailId = null;
     gMembers = new Set(g ? members(g).map((c) => c.id) : []);
     $("gForm").reset();
     $("gName").value = g ? g.name : "";
@@ -765,6 +767,7 @@
   $("gBack").addEventListener("click", () => { if (!gSaving) showGroupList(); });
   $("gCancel").addEventListener("click", () => { if (gSaving) return; gFromList ? showGroupList() : closeGroups(); });
   $("gClose").addEventListener("click", closeGroups);
+  gdlg.addEventListener("close", () => { gDetailId = null; });
   gdlg.addEventListener("cancel", (e) => { if (gSaving) e.preventDefault(); });
   gdlg.addEventListener("click", (e) => { if (e.target === gdlg) closeGroups(); });
 
@@ -892,7 +895,7 @@
     input.addEventListener("change", () => fn(input.checked));
     return el("label", { class: "chk" + (on ? " on" : "") }, input, document.createTextNode(label));
   }
-  const editButton = (c) => el("button", { class: "icon-btn", type: "button", text: "Editar", "aria-label": "Editar " + c.name, onclick: () => startEdit(c) });
+  const editButton = (c) => el("button", { class: "icon-btn", type: "button", text: "Editar", "aria-label": "Editar " + c.name, onclick: () => { closeGroups(); startEdit(c); } });
   function deleteControls(c) {
     if (confirmDelete === c.id) {
       return el("div", { class: "actions" },
@@ -978,13 +981,12 @@
     } else {
       status.append(el("span", { class: "pill accent", text: `${here.length} de ${m.length} na coleção` }));
     }
-    // o grupo aparece fechado; clicar nele (ou em "Ver cards") mostra os cards logo abaixo
-    const open = expanded.has(g.id);
-    const toggle = () => { open ? expanded.delete(g.id) : expanded.add(g.id); render(); };
-    if (here.length) info.append(el("button", { class: "gtoggle", type: "button", "aria-expanded": String(open), onclick: toggle,
-      text: open ? "Esconder os cards ▴" : `Ver ${here.length === 1 ? "o card" : `os ${here.length} cards`} ▾` }));
-    const head = el("div", { class: "row ghead" + (here.length ? " clickable" : "") + (open ? " open" : "") }, stack(m), info, status, el("div", { class: "actions" }));
-    if (here.length) head.addEventListener("click", (e) => { if (!e.target.closest("button, label, input, a")) toggle(); });
+    // clicar no grupo abre a janela do grupo com os cards dele
+    const open = () => openGroupDetail(g, false);
+    const head = el("div", { class: "row ghead clickable", role: "button", tabindex: "0", "aria-haspopup": "dialog", "aria-label": "Abrir o grupo " + g.name },
+      stack(m), info, status, el("div", { class: "actions" }, el("span", { class: "gopen", "aria-hidden": "true", text: "›" })));
+    head.addEventListener("click", (e) => { if (!e.target.closest("button, label, input, a")) open(); });
+    head.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === head) { e.preventDefault(); open(); } });
     return head;
   }
 
@@ -1016,6 +1018,10 @@
     $("cPay").textContent = byStage.pay.length; $("cArr").textContent = byStage.arr.length; $("cCol").textContent = byStage.col.length;
     document.querySelectorAll("#mainTabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
     if (gdlg.open && !$("gListView").hidden) renderGroupList();
+    if (gdlg.open && gDetailId && !$("gDetailView").hidden) {
+      const g = groupsById.get(gDetailId);
+      if (g) showGroupDetail(g); else showGroupList();
+    }
 
     const panel = $("panel"); panel.replaceChildren();
     const list = byStage[tab];
@@ -1066,7 +1072,7 @@
       table.append(el("div", { class: "thead" }, el("span", { text: "Foto" }), el("span", { text: "Card · Valores" }), el("span", { text: HEAD[tab] }), el("span", {})));
       const fn = tab === "pay" ? rowPay : tab === "arr" ? rowArr : rowCol;
       items.forEach((it) => table.append(it.g
-        ? el("div", { class: "group" }, groupHead(it.g, it.cards), ...(expanded.has(it.g.id) ? it.cards.map((c) => fn(c, true)) : []))
+        ? el("div", { class: "group" }, groupHead(it.g, it.cards))
         : fn(it.card, false)));
     }
     panel.append(table);
