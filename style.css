@@ -195,7 +195,11 @@ body:has(dialog.sheet[open]) { overflow: hidden; }
 .glist { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 .glist-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .glist-head p { margin: 0; color: var(--muted); font-size: 0.88rem; flex: 1 1 240px; }
-#gItems { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+#gItems, .gitems { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.gitem-btns { display: flex; gap: 6px; }
+.gitems .gitem { grid-template-columns: 52px minmax(0, 1fr) auto; }
+.gitems .thumb { width: 52px; }
+.gdetail-head { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 14px; align-items: start; }
 .gitem { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; }
 .gitem + .gitem { border-top: 1px solid var(--line); }
 .gitem .stack { width: 52px; }
@@ -224,6 +228,7 @@ input[type=search] { font: inherit; font-size: 0.95rem; color: var(--fg); backgr
 .pill.ok { background: var(--ok-soft); color: var(--ok); }
 .pill.accent { background: var(--accent-soft); color: var(--accent); }
 .actions { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+@media (max-width: 640px) { .ghead .actions:empty { display: none; } }
 @media (max-width: 640px) {
   .thead { display: none; }
   .row { grid-template-columns: 64px minmax(0, 1fr); gap: 10px 12px; align-items: start; }

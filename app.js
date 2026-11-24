@@ -517,7 +517,7 @@
   function closeGroups() { if (!gSaving && gdlg.open) gdlg.close(); }
   function showGroupList() {
     gEditing = null;
-    $("gListView").hidden = false; $("gForm").hidden = true; $("gBack").hidden = true;
+    $("gListView").hidden = false; $("gForm").hidden = true; $("gDetailView").hidden = true; $("gBack").hidden = true;
     $("gTitle").textContent = "Grupos";
     renderGroupList();
   }
@@ -535,8 +535,42 @@
           el("span", { class: "title", text: g.name }),
           el("span", { class: "tag", text: kindLabel(g) }),
           el("span", { class: "from" }, document.createTextNode(plural(m.length, "card", "cards") + " · "), el("b", { class: "num", text: money(groupTotal(g)) }))),
-        el("button", { class: "btn-ghost", type: "button", text: "Editar", "aria-label": "Editar o grupo " + g.name, onclick: () => openGroupForm(g, true) }));
+        el("div", { class: "gitem-btns" },
+          el("button", { class: "btn-ghost", type: "button", text: "Ver", "aria-label": "Ver os cards do grupo " + g.name, onclick: () => showGroupDetail(g) }),
+          el("button", { class: "btn-ghost", type: "button", text: "Editar", "aria-label": "Editar o grupo " + g.name, onclick: () => openGroupForm(g, true) })));
     }));
+  }
+  // "Ver": mostra os valores do grupo e as informações de cada card dele, em qualquer aba
+  function showGroupDetail(g) {
+    const m = members(g);
+    const count = (st) => m.filter((c) => stage(c) === st).length;
+    const d = groupDue(g);
+    const where = [["pay", "em Pagamento"], ["arr", "em Chegada"], ["col", "na Coleção"]].filter(([st]) => count(st)).map(([st, t]) => `${count(st)} ${t}`).join(" · ");
+    const head = el("div", { class: "gdetail-head" }, stack(m),
+      el("div", { class: "info" },
+        el("span", { class: "tag tag-group", text: "Grupo · " + kindLabel(g) }),
+        groupMoney(g, m),
+        d > 0 ? el("span", { class: "pill warn" }, document.createTextNode("Falta pagar no grupo "), el("b", { class: "num", text: money(d) }))
+          : el("span", { class: "pill ok", text: "Grupo pago" }),
+        where ? el("span", { class: "from", text: where }) : null));
+    const items = m.map((c) => {
+      const st = stage(c);
+      const when = c.arrived_at ? new Date(c.arrived_at).toLocaleDateString("pt-BR") : "";
+      const pill = st === "col" ? el("span", { class: "pill accent", text: when ? "Chegou em " + when : "Na coleção" })
+        : st === "arr" ? el("span", { class: "pill ok", text: "Chegada · pago" })
+        : el("span", { class: "pill warn", text: c.paid_price ? "Pagamento · faltam os fretes" : "Pagamento · falta o preço" });
+      return el("div", { class: "gitem" }, thumb(c),
+        el("div", { class: "info" },
+          el("span", { class: "title", text: c.name }),
+          c.seller ? el("span", { class: "from" }, document.createTextNode("Vendedor: "), el("b", { text: c.seller })) : null,
+          el("span", { class: "from" }, document.createTextNode("Preço: "), el("b", { class: "num", text: money(c.price) })),
+          pill),
+        el("button", { class: "btn-ghost", type: "button", text: "Editar", "aria-label": "Editar " + c.name, onclick: () => { closeGroups(); startEdit(c); } }));
+    });
+    $("gDetailView").replaceChildren(head,
+      el("div", { class: "gitems" }, ...(items.length ? items : [el("div", { class: "empty" }, el("span", { text: "Nenhum card neste grupo ainda." }))])));
+    $("gTitle").textContent = g.name;
+    $("gListView").hidden = true; $("gForm").hidden = true; $("gDetailView").hidden = false; $("gBack").hidden = false;
   }
   function openGroupForm(g, fromList) {
     if (saving) return;
@@ -551,7 +585,7 @@
     $("gSubmit").textContent = g ? "Salvar grupo" : "Criar grupo";
     $("gDelete").hidden = !g;
     $("gDelConfirm").hidden = true;
-    $("gListView").hidden = true; $("gForm").hidden = false; $("gBack").hidden = !fromList;
+    $("gListView").hidden = true; $("gDetailView").hidden = true; $("gForm").hidden = false; $("gBack").hidden = !fromList;
     $("gSearch").hidden = cards.length < 8;
     updateGroupKind();
     renderPicker();
@@ -562,7 +596,7 @@
   function updateGroupKind() {
     const { t, o } = gKind();
     gFees.show(t, o);
-    $("gHint").textContent = HINT[t + "-" + o].replace("em Editar", "em Editar grupo");
+    $("gHint").textContent = HINT[t + "-" + o].replace("em Editar", "em Editar, no botão Grupos");
     updateGroupTotal();
   }
   document.querySelectorAll("input[name=gType], input[name=gOrigin]").forEach((r) => r.addEventListener("change", updateGroupKind));
@@ -887,7 +921,7 @@
         el("div", { class: "checks" }, ...feeParts(g).map((x) => check(x.check, g[x.paid], (v) => patchGroup(g, { [x.paid]: v })))),
         d > 0 ? el("span", { class: "pill warn" }, document.createTextNode("Falta pagar no grupo "), el("b", { class: "num", text: money(d) }))
           : el("span", { class: "pill ok", text: "Grupo pago" }));
-      if (!m.length) note("Nenhum card neste grupo ainda. Adicione em Editar grupo.");
+      if (!m.length) note("Nenhum card neste grupo ainda. Adicione pelo botão Grupos.");
       else if (here.length < m.length) note(`${m.length - here.length} de ${m.length} cards já saíram de Pagamento.`);
     } else if (tab === "arr") {
       const arrived = countIn("col"), waiting = countIn("pay");
@@ -903,8 +937,7 @@
     const toggle = () => { open ? expanded.delete(g.id) : expanded.add(g.id); render(); };
     if (here.length) info.append(el("button", { class: "gtoggle", type: "button", "aria-expanded": String(open), onclick: toggle,
       text: open ? "Esconder os cards ▴" : `Ver ${here.length === 1 ? "o card" : `os ${here.length} cards`} ▾` }));
-    const head = el("div", { class: "row ghead" + (here.length ? " clickable" : "") + (open ? " open" : "") }, stack(m), info, status,
-      el("div", { class: "actions" }, el("button", { class: "icon-btn", type: "button", text: "Editar grupo", "aria-label": "Editar o grupo " + g.name, onclick: () => openGroupForm(g, false) })));
+    const head = el("div", { class: "row ghead" + (here.length ? " clickable" : "") + (open ? " open" : "") }, stack(m), info, status, el("div", { class: "actions" }));
     if (here.length) head.addEventListener("click", (e) => { if (!e.target.closest("button, label, input, a")) toggle(); });
     return head;
   }

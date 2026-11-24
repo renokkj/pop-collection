@@ -30,7 +30,7 @@ Criei o Pop Collection para resolver um problema meu: acompanhar quanto já pagu
 - **Contas individuais:** cada pessoa só vê os próprios cards.
 - **Cadastro com foto:** pelo botão "+ Cadastrar Photocard", que abre uma janela com nome, vendedor, categoria, preço e fretes. A foto e o vendedor são opcionais. Dá para cadastrar vários cards de uma vez com "+ Adicionar outro photocard".
 - **Categorias de compra:** Individual ou CEG, Nacional ou Internacional. O formulário mostra só os fretes e a taxa de importação (opcional) de cada categoria. Na CEG, você informa só a sua parte do que é dividido.
-- **Grupos de compra:** junte cards da mesma compra num grupo com nome. Os fretes e a taxa de importação ficam no grupo e contam uma vez só, não importa quantos cards ele tenha. Pelo botão "Grupos" dá para criar grupos com cards já cadastrados, adicionar ou tirar cards, renomear e excluir o grupo (os cards continuam cadastrados).
+- **Grupos de compra:** junte cards da mesma compra num grupo com nome. Os fretes e a taxa de importação ficam no grupo e contam uma vez só, não importa quantos cards ele tenha. Pelo botão "Grupos" dá para ver os cards de cada grupo (em "Ver"), criar grupos com cards já cadastrados, adicionar ou tirar cards, renomear e excluir o grupo (os cards continuam cadastrados).
 - **Edição e exclusão:** corrija nome, vendedor, categoria, valores ou foto depois do cadastro, ou exclua um card.
 - **Controle financeiro:** mostra o total gasto, o que já foi pago e o que falta pagar.
 - **Três abas:** Pagamento, Chegada e Coleção, cada uma com a contagem de cards.
