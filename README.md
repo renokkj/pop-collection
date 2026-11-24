@@ -17,26 +17,30 @@ Controle os pagamentos, a chegada e a coleção dos seus photocards.
 ## O que o app faz
 
 - **Contas individuais:** cada pessoa só vê os próprios cards.
-- **Cadastro com foto:** nome, vendedor, preço e frete. A foto e o vendedor são opcionais.
+- **Cadastro com foto:** pelo botão "+ Cadastrar Photocard", que abre uma janela com nome, vendedor, categoria, preço e fretes. A foto e o vendedor são opcionais.
 - **Categorias de compra:** Individual ou CEG, Nacional ou Internacional. O formulário mostra só os fretes e a taxa de importação (opcional) de cada categoria. Na CEG, você informa só a sua parte do que é dividido.
-- **Edição:** corrija nome, vendedor, valores ou foto depois do cadastro.
+- **Edição e exclusão:** corrija nome, vendedor, categoria, valores ou foto depois do cadastro, ou exclua um card.
 - **Controle financeiro:** mostra o total gasto, o que já foi pago e o que falta pagar.
+- **Três abas:** Pagamento, Chegada e Coleção, cada uma com a contagem de cards.
 - **Chegada:** separa os cards quitados que ainda estão a caminho.
+- **Recuperar a senha** pelo link "Esqueci minha senha".
 - **Tema claro e escuro**, conforme o dispositivo.
 
 ## Como funciona
 
+O app abre nas abas **Pagamento**, **Chegada** e **Coleção**. O cadastro fica no botão **+ Cadastrar Photocard**, ao lado das abas.
+
 ```mermaid
 flowchart LR
-    A[Cadastro] --> B[Pagamento]
+    A[+ Cadastrar Photocard] --> B[Pagamento]
     B -->|tudo pago| C[Chegada]
     C -->|Chegou ✓| D[Coleção]
 ```
 
-1. **Cadastro:** escolha a categoria e preencha os dados do card. O total (preço, fretes e taxas) é calculado sozinho.
+1. **Cadastrar:** clique em "+ Cadastrar Photocard", escolha a categoria e preencha os dados do card. O total (preço, fretes e taxa) é calculado sozinho, e o card entra na aba Pagamento.
 2. **Pagamento:** marque cada valor pago (preço, fretes e taxa). O app mostra quanto ainda falta.
-3. **Chegada:** com tudo pago, o card vem para cá. Quando receber, clique em "Chegou ✓".
-4. **Coleção:** guarda os cards recebidos. "Apagar coleção" remove esses cards e suas fotos, mas mantém o valor no total gasto.
+3. **Chegada:** com tudo pago, o card vem para cá. Quando receber, clique em "Chegou ✓". Se marcou algo errado, "Voltar p/ pagamento" desfaz.
+4. **Coleção:** guarda os cards recebidos ("Ainda não chegou" devolve o card para a Chegada). "Apagar coleção" remove esses cards e suas fotos, mas mantém o valor no total gasto.
 
 ## Tecnologias
 
@@ -56,7 +60,7 @@ flowchart LR
 
 | Arquivo | O que faz |
 | --- | --- |
-| [`index.html`](index.html) | Telas de login, cadastro e do app |
+| [`index.html`](index.html) | Telas de login e do app, e a janela de cadastro de photocard |
 | [`style.css`](style.css) | Visual (temas claro e escuro) |
 | [`app.js`](app.js) | Contas, cards, fotos e totais |
 | [`config.js`](config.js) | URL e chave `anon` do Supabase |
@@ -71,33 +75,3 @@ python3 -m http.server 8000
 ```
 
 Depois, abra http://localhost:8000.
-
-> O `config.js` deste repositório aponta para o banco do app publicado. Para testar com seus próprios dados, siga o passo a passo abaixo.
-
-<details>
-<summary><b>Publicar a sua própria versão</b></summary>
-
-### 1. Criar o projeto no Supabase
-
-1. Crie uma conta em https://supabase.com e clique em **New project**.
-2. Abra **SQL Editor**, cole todo o conteúdo de [`supabase/schema.sql`](supabase/schema.sql) e clique em **Run**.
-3. Em **Project Settings → API**, copie a **Project URL** e a chave **anon public**.
-4. Substitua os dois valores no [`config.js`](config.js).
-
-### 2. Publicar no GitHub Pages
-
-1. Envie os arquivos para um repositório no GitHub.
-2. Em **Settings → Pages**, escolha **Deploy from a branch**, a branch `main` e a pasta `/ (root)`.
-3. Salve e espere o site ficar disponível em `https://SEU-USUARIO.github.io/NOME-DO-REPO/`.
-
-### 3. Ajustar as URLs no Supabase
-
-Em **Authentication → URL Configuration**, use o endereço do seu site em **Site URL** e adicione o mesmo endereço em **Redirect URLs**. Assim, os links dos e-mails voltam para o seu site.
-
-### 4. Escolher a confirmação de e-mail
-
-Por padrão, cada pessoa precisa confirmar o e-mail antes de entrar. Para desligar, desative **Confirm email** em **Authentication → Sign In / Providers → Email**.
-
-O envio de e-mails do plano gratuito é limitado. Para muitos usuários, configure um SMTP próprio em **Authentication → Emails**.
-
-</details>
