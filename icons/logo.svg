@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="88 78 336 356">
+  <defs>
+    <linearGradient id="holoA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#46e0a6"/><stop offset=".35" stop-color="#3fb8f0"/>
+      <stop offset=".65" stop-color="#7a5cff"/><stop offset="1" stop-color="#e46ad0"/>
+    </linearGradient>
+    <linearGradient id="holoB" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8f6bff"/><stop offset=".4" stop-color="#3ccfd8"/>
+      <stop offset=".75" stop-color="#5fe08a"/><stop offset="1" stop-color="#b98bff"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset=".28" stop-color="#fff" stop-opacity="0"/><stop offset=".42" stop-color="#fff" stop-opacity=".55"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset=".7" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".78" stop-color="#fff" stop-opacity=".3"/><stop offset=".84" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#0b0820" flood-opacity=".45"/></filter>
+  </defs>
+  <g transform="rotate(-11 210 262)" filter="url(#sh)">
+    <rect x="118" y="118" width="184" height="288" rx="20" fill="url(#holoB)"/>
+    <rect x="118" y="118" width="184" height="288" rx="20" fill="url(#sheen)"/>
+    <rect x="124" y="124" width="172" height="276" rx="15" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="5"/>
+  </g>
+  <g transform="rotate(9 300 262)" filter="url(#sh)">
+    <rect x="210" y="112" width="184" height="288" rx="20" fill="url(#holoA)"/>
+    <rect x="210" y="112" width="184" height="288" rx="20" fill="url(#sheen)"/>
+    <rect x="216" y="118" width="172" height="276" rx="15" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="5"/>
+  </g>
+</svg>

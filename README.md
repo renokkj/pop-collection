@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="icons/icon-512.png" alt="" width="96">
+
 # Pop Collection
 
 Controle os pagamentos, a chegada e a coleção dos seus photocards.
@@ -95,6 +97,7 @@ flowchart LR
 | [`style.css`](style.css) | Visual (temas claro e escuro) |
 | [`app.js`](app.js) | Contas, cards, grupos, fotos e totais |
 | [`config.js`](config.js) | URL e chave `anon` do Supabase |
+| [`icons/`](icons) e [`manifest.webmanifest`](manifest.webmanifest) | Logo, ícone da aba e ícone para instalar o site como app |
 | [`supabase/schema.sql`](supabase/schema.sql) | Tabelas, regras de segurança e bucket de fotos |
 
 ## Rodar no computador
