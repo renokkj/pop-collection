@@ -178,6 +178,10 @@ body:has(dialog.sheet[open]) { overflow: hidden; }
 .group + .row, .row + .group, .group + .group { border-top: 1px solid var(--line); }
 .ghead { background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface)); }
 .ghead .info .title { font-family: var(--f-display); font-size: 1.02rem; }
+.ghead.clickable { cursor: pointer; }
+.ghead.clickable:hover { background: color-mix(in srgb, var(--accent-soft) 85%, var(--surface)); }
+.gtoggle { margin-top: 4px; width: fit-content; background: var(--surface); color: var(--accent); border: 1px solid var(--accent-soft); border-radius: 99px; padding: 5px 12px; font-size: 0.82rem; }
+.gtoggle:hover { border-color: var(--accent); }
 .row.sub { border-top: 1px dashed var(--line); box-shadow: inset 4px 0 var(--accent-soft); }
 .stack { width: 64px; aspect-ratio: 55 / 85; position: relative; }
 .stack span { position: absolute; inset: 6% 10%; border-radius: 6px; background: var(--holo); border: 1.5px solid var(--surface); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.12); }

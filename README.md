@@ -50,7 +50,7 @@ flowchart LR
 ```
 
 1. **Cadastrar:** clique em "+ Cadastrar Photocard", escolha a categoria e preencha os dados do card. O total (preço, fretes e taxa) é calculado sozinho, e o card entra na aba Pagamento.
-2. **Pagamento:** marque cada valor pago (preço, fretes e taxa). O app mostra quanto ainda falta. Num grupo, cada card tem o seu "Preço pago" e os fretes e a taxa são marcados uma vez só, no topo do grupo.
+2. **Pagamento:** marque cada valor pago (preço, fretes e taxa). O app mostra quanto ainda falta. Num grupo, cada card tem o seu "Preço pago" e os fretes e a taxa são marcados uma vez só, no bloco do grupo. Clique no grupo para ver os cards dele.
 3. **Chegada:** com tudo pago, o card vem para cá. Quando receber, clique em "Chegou ✓" (ou em "Todos chegaram ✓" no grupo). Se marcou algo errado, "Voltar p/ pagamento" desfaz.
 4. **Coleção:** guarda os cards recebidos, um por um ou organizados por grupo ("Ainda não chegou" devolve o card para a Chegada). "Apagar coleção" remove esses cards e suas fotos, mas mantém o valor no total gasto.
 

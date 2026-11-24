@@ -30,6 +30,7 @@
   let loading = true, confirmClear = false, confirmDelete = null, clearing = false;
   let editing = null, saving = false; // card em edição no formulário
   const busy = new Set();
+  const expanded = new Set(); // grupos abertos (mostrando os cards) nas abas
 
   // ---------- categorias de compra ----------
   // Individual Nacional: 1 frete (GOM → você).
@@ -897,8 +898,15 @@
     } else {
       status.append(el("span", { class: "pill accent", text: `${here.length} de ${m.length} na coleção` }));
     }
-    return el("div", { class: "row ghead" }, stack(m), info, status,
+    // o grupo aparece fechado; clicar nele (ou em "Ver cards") mostra os cards logo abaixo
+    const open = expanded.has(g.id);
+    const toggle = () => { open ? expanded.delete(g.id) : expanded.add(g.id); render(); };
+    if (here.length) info.append(el("button", { class: "gtoggle", type: "button", "aria-expanded": String(open), onclick: toggle,
+      text: open ? "Esconder os cards ▴" : `Ver ${here.length === 1 ? "o card" : `os ${here.length} cards`} ▾` }));
+    const head = el("div", { class: "row ghead" + (here.length ? " clickable" : "") + (open ? " open" : "") }, stack(m), info, status,
       el("div", { class: "actions" }, el("button", { class: "icon-btn", type: "button", text: "Editar grupo", "aria-label": "Editar o grupo " + g.name, onclick: () => openGroupForm(g, false) })));
+    if (here.length) head.addEventListener("click", (e) => { if (!e.target.closest("button, label, input, a")) toggle(); });
+    return head;
   }
 
   const HEAD = { pay: "Pagamento", arr: "Chegada", col: "Status" };
@@ -979,7 +987,7 @@
       table.append(el("div", { class: "thead" }, el("span", { text: "Foto" }), el("span", { text: "Card · Valores" }), el("span", { text: HEAD[tab] }), el("span", {})));
       const fn = tab === "pay" ? rowPay : tab === "arr" ? rowArr : rowCol;
       items.forEach((it) => table.append(it.g
-        ? el("div", { class: "group" }, groupHead(it.g, it.cards), ...it.cards.map((c) => fn(c, true)))
+        ? el("div", { class: "group" }, groupHead(it.g, it.cards), ...(expanded.has(it.g.id) ? it.cards.map((c) => fn(c, true)) : []))
         : fn(it.card, false)));
     }
     panel.append(table);
