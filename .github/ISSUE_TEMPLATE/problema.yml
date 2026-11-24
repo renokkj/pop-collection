@@ -1,0 +1,37 @@
+name: Reportar um problema
+description: Algo no app não funciona como deveria.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: oque
+    attributes:
+      label: O que aconteceu?
+      description: Conte o que você fez e o que deu errado.
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que você esperava que acontecesse?
+    validations:
+      required: true
+  - type: dropdown
+    id: aparelho
+    attributes:
+      label: Onde aconteceu?
+      options:
+        - Computador
+        - Celular
+        - Os dois
+    validations:
+      required: true
+  - type: input
+    id: navegador
+    attributes:
+      label: Navegador
+      placeholder: "Ex.: Chrome, Safari, Firefox"
+  - type: textarea
+    id: telas
+    attributes:
+      label: Capturas de tela
+      description: Se puder, arraste uma imagem para cá. Não mostre e-mail nem senha.

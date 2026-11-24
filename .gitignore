@@ -17,9 +17,12 @@ node_modules/
 # macOS e Windows
 .DS_Store
 Thumbs.db
+Desktop.ini
 
 # Editores e ferramentas
 .vscode/
 .idea/
 *.swp
-.claude/settings.local.json
+
+# Arquivos compactados
+*.zip

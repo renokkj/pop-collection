@@ -1,0 +1,20 @@
+name: Sugerir uma ideia
+description: Uma funcionalidade nova ou uma melhoria para o app.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: ideia
+    attributes:
+      label: Qual é a ideia?
+    validations:
+      required: true
+  - type: textarea
+    id: motivo
+    attributes:
+      label: Que problema ela resolve?
+      description: Ex.: "Eu queria saber quanto já gastei com um grupo específico."
+  - type: textarea
+    id: extra
+    attributes:
+      label: Mais alguma coisa?
+      description: Exemplos, desenhos ou links que ajudem a entender.
