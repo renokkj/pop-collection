@@ -355,9 +355,9 @@
   }
   function updateKindFields() {
     const { mode, g, gift, t, o } = formKind();
-    $("fTypeWrap").hidden = $("fOriginWrap").hidden = !!g || gift;
-    $("fHint").textContent = gift ? "Presente: o card não tem custo nenhum e vai direto para a aba Chegada." : g ? "" : HINT[t + "-" + o];
-    $("fGroupRow").hidden = gift;
+    // presente num grupo novo: o tipo e a origem valem para o grupo (e os fretes dele)
+    $("fTypeWrap").hidden = $("fOriginWrap").hidden = !!g || (gift && mode !== "new");
+    $("fHint").textContent = gift ? "Presente: o card não tem custo nenhum e vai direto para a aba Chegada. Num grupo, ele não muda os fretes do grupo." : g ? "" : HINT[t + "-" + o];
     $("fGroupNameWrap").hidden = mode !== "new";
     $("fGroupName").required = mode === "new";
     $("fGroupFees").hidden = mode !== "new";
@@ -388,7 +388,7 @@
     $("fTotalLabel").textContent = mode === "new" ? "Total do grupo" : mode ? (entries.length > 1 ? "Preço dos cards" : "Preço do card") : "Total";
   }
   document.querySelectorAll("input[name=fType], input[name=fOrigin]").forEach((r) => r.addEventListener("change", updateKindFields));
-  $("fGift").addEventListener("change", () => { if ($("fGift").checked) $("fGroup").value = ""; updateKindFields(); });
+  $("fGift").addEventListener("change", updateKindFields);
 
   function formLabels() {
     const n = entries.length;
@@ -487,7 +487,7 @@
       const values = (e) => {
         const base = { name: e.name.value.trim(), seller: e.seller.value.trim() || null };
         // presente: zera os valores e marca tudo como pago
-        if (gift) return { ...base, gift: true, group_id: null, purchase_type: t, origin: o, price: 0, shipping: 0, shipping_to_gom: 0, import_tax: 0,
+        if (gift) return { ...base, gift: true, group_id: g ? g.id : null, purchase_type: g ? g.purchase_type : t, origin: g ? g.origin : o, price: 0, shipping: 0, shipping_to_gom: 0, import_tax: 0,
           paid_price: true, paid_shipping: true, paid_shipping_to_gom: true, paid_tax: true };
         const v = { ...base, gift: false, price: cents(e.price.value), group_id: g ? g.id : null };
         if (!g) Object.assign(v, { purchase_type: t, origin: o, ...e.fees.values(t, o) });
@@ -528,7 +528,7 @@
       const n = data.length;
       saving = false; resetForm(); closeForm();
       const what = n > 1 ? `${n} photocards cadastrados` : "Photocard cadastrado";
-      toast((photoFails ? `${what}, mas ${plural(photoFails, "foto não foi enviada", "fotos não foram enviadas")}.` : `${what} em ${gift ? "Chegada" : "Pagamento"}.`) + (g && !gift ? ` Grupo: ${g.name}.` : ""));
+      toast((photoFails ? `${what}, mas ${plural(photoFails, "foto não foi enviada", "fotos não foram enviadas")}.` : `${what} em ${gift ? "Chegada" : "Pagamento"}.`) + (g ? ` Grupo: ${g.name}.` : ""));
       tab = gift ? "arr" : "pay"; render();
       signPhotos().then(render);
     } catch (err) {
@@ -642,7 +642,7 @@
   const otherGroup = (c) => (grp(c) && (!gEditing || c.group_id !== gEditing.id) ? grp(c) : null);
   function renderPicker() {
     const q = $("gSearch").value.trim().toLowerCase();
-    const list = cards.filter((c) => !c.gift && (!q || c.name.toLowerCase().includes(q)))
+    const list = cards.filter((c) => !q || c.name.toLowerCase().includes(q))
       // os do grupo primeiro, depois os sem grupo; os que já estão em outro grupo vão por último
       .sort((a, b) => (gMembers.has(b.id) - gMembers.has(a.id)) || (!!otherGroup(a) - !!otherGroup(b)));
     const box = $("gPicker");
@@ -662,7 +662,7 @@
       const item = el("label", { class: "pick" + (input.checked ? " on" : "") + (other ? " locked" : ""), title: other ? `Este card já está no grupo "${other.name}". Para trocar, tire ele de lá primeiro.` : null }, input, thumb(c),
         el("span", { class: "pick-info" },
           el("span", { class: "title", text: c.name }),
-          el("span", { class: "from", text: [money(c.price), STAGE_NAME[stage(c)]].join(" · ") }),
+          el("span", { class: "from", text: [c.gift ? "Presente" : money(c.price), STAGE_NAME[stage(c)]].join(" · ") }),
           other ? el("span", { class: "tag tag-group", text: `Já está no grupo "${other.name}"` }) : null));
       return item;
     }));
@@ -916,7 +916,7 @@
     const g = grp(c);
     return el("div", { class: "info" },
       el("span", { class: "title", text: c.name }),
-      inGroup ? null : el("span", { class: "tag" + (g ? " tag-group" : ""), text: c.gift ? "Presente" : g ? "Grupo: " + g.name : kindLabel(c) }),
+      inGroup ? null : el("span", { class: "tag" + (g ? " tag-group" : ""), text: c.gift ? (g ? "Presente · Grupo: " + g.name : "Presente") : g ? "Grupo: " + g.name : kindLabel(c) }),
       c.seller ? el("span", { class: "from" }, document.createTextNode("Vendedor: "), el("b", { text: c.seller })) : null,
       moneyBlock(c));
   }
@@ -979,7 +979,9 @@
       else if (here.length < m.length) note(`${m.length - here.length} de ${m.length} cards já saíram de Pagamento.`);
     } else if (tab === "arr") {
       const arrived = countIn("col"), waiting = countIn("pay");
-      status.append(el("span", { class: "pill ok", text: "Fretes e taxa pagos" }));
+      // um presente chega a Chegada mesmo com os fretes do grupo em aberto
+      status.append(feesPaid(g) ? el("span", { class: "pill ok", text: "Fretes e taxa pagos" })
+        : el("span", { class: "pill warn" }, document.createTextNode("Falta pagar no grupo "), el("b", { class: "num", text: money(groupDue(g)) })));
       note(`${arrived} de ${plural(m.length, "card chegou", "cards chegaram")}` + (waiting ? ` · ${waiting} ainda em Pagamento` : ""));
       if (here.length > 1) status.append(el("button", { class: "btn-ok", type: "button", style: "width:fit-content", text: `Todos os ${here.length} chegaram ✓`,
         onclick: () => patchMany(here, { arrived: true, arrived_at: new Date().toISOString() }, `${here.length} cards foram para a Coleção!`) }));
