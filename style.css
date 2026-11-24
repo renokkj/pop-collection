@@ -121,14 +121,25 @@ button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid t
 .btn-add { white-space: nowrap; padding: 10px 18px; font-size: 0.92rem; box-shadow: 0 2px 8px rgba(91,63,214,.25); }
 .btn-add:hover { filter: brightness(1.06); }
 .btn-groups { white-space: nowrap; padding: 10px 16px; font-size: 0.92rem; background: var(--surface); }
+/* botão flutuante do celular: abre "Cadastrar" e "Grupos" acima dele */
+.fab { display: none; }
 @media (max-width: 600px) {
-  /* no celular o botão fica fixo embaixo, ao alcance do polegar */
-  .btn-add { position: fixed; z-index: 10; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); border-radius: 99px; padding: 13px 20px; box-shadow: 0 6px 20px rgba(0,0,0,.22); }
+  .bar .btn-add, .bar .btn-groups { display: none; }
   #appView { padding-bottom: 96px; }
-  .bar { flex-wrap: wrap; }
-  .btn-groups { order: -1; margin-left: auto; padding: 7px 14px; font-size: 0.85rem; }
-  .bar .tabs { flex-basis: 100%; }
-  .toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+  .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  .fab { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; position: fixed; z-index: 10; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .fab-main { width: 58px; height: 58px; border-radius: 50%; padding: 0; font-size: 1.9rem; font-weight: 400; line-height: 1; box-shadow: 0 6px 20px rgba(0,0,0,.25); display: grid; place-items: center; }
+  .fab-main span { display: block; transition: transform .2s ease; }
+  .fab-main[aria-expanded=true] span { transform: rotate(45deg); }
+  .fab-menu { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .fab-item { border-radius: 99px; padding: 12px 18px; font-size: 0.92rem; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+  .fab-item.btn-ghost { background: var(--surface); }
+  .fab-shade { position: fixed; inset: 0; z-index: 9; background: rgba(20,19,26,.35); }
+  @media (prefers-reduced-motion: no-preference) {
+    .fab-menu:not([hidden]) .fab-item { animation: fab-in .18s ease both; }
+    .fab-menu .fab-item:first-child { animation-delay: .04s; }
+    @keyframes fab-in { from { opacity: 0; transform: translateY(8px); } }
+  }
 }
 
 /* janela do cadastro */

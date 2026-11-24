@@ -6,7 +6,7 @@
 <title>Pop Collection</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=9">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -81,6 +81,16 @@
 
   <section class="panel" id="panel"></section>
 
+  <!-- celular: um botão que abre as opções de cadastro e de grupos -->
+  <div class="fab-shade" id="fabShade" hidden></div>
+  <div class="fab" id="fab">
+    <div class="fab-menu" id="fabMenu" hidden>
+      <button class="btn-ghost fab-item" type="button" id="fabGroups" aria-haspopup="dialog">Grupos</button>
+      <button class="btn-primary fab-item" type="button" id="fabAdd" aria-haspopup="dialog">Cadastrar photocard</button>
+    </div>
+    <button class="btn-primary fab-main" type="button" id="fabMain" aria-expanded="false" aria-controls="fabMenu" aria-label="Abrir opções: cadastrar photocard ou grupos"><span aria-hidden="true">+</span></button>
+  </div>
+
   <!-- Cadastro / edição de photocards (abre pelo botão "+ Cadastrar Photocard" ou por Editar) -->
   <dialog class="sheet" id="addDialog" aria-labelledby="addTitle">
     <div class="sheet-box">
@@ -90,21 +100,26 @@
       </div>
       <form class="add" id="addForm" autocomplete="off">
         <div class="kind" id="fKind">
-          <div class="f"><span id="lType">Tipo de compra</span>
+          <div class="f" id="fTypeWrap"><span id="lType">Tipo de compra</span>
             <div class="seg" role="radiogroup" aria-labelledby="lType">
               <label><input type="radio" name="fType" value="individual" checked><span>Individual</span></label>
               <label><input type="radio" name="fType" value="ceg"><span title="Compra em grupo">CEG</span></label>
             </div>
           </div>
-          <div class="f"><span id="lOrigin">Origem</span>
+          <div class="f" id="fOriginWrap"><span id="lOrigin">Origem</span>
             <div class="seg" role="radiogroup" aria-labelledby="lOrigin">
               <label><input type="radio" name="fOrigin" value="nacional" checked><span>Nacional</span></label>
               <label><input type="radio" name="fOrigin" value="internacional"><span>Internacional</span></label>
             </div>
           </div>
+          <div class="f"><span id="lGift">Sem custo</span>
+            <div class="seg" aria-labelledby="lGift">
+              <label><input type="checkbox" id="fGift"><span>Presente</span></label>
+            </div>
+          </div>
           <p class="hint" id="fHint"></p>
         </div>
-        <div class="grouprow">
+        <div class="grouprow" id="fGroupRow">
           <label class="f">Grupo
             <select id="fGroup">
               <option value="">Sem grupo</option>
@@ -210,7 +225,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="config.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

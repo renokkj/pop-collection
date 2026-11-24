@@ -82,7 +82,8 @@
     return p;
   }
   const allPaid = (c) => parts(c).every((x) => c[x.paid]) && (!grp(c) || feesPaid(grp(c)));
-  const stage = (c) => (c.arrived ? "col" : allPaid(c) ? "arr" : "pay");
+  // presente: sem custo nenhum, vai direto para Chegada
+  const stage = (c) => (c.arrived ? "col" : c.gift || allPaid(c) ? "arr" : "pay");
   const total = (c) => sumParts(c, parts(c));
   const due = (c) => dueParts(c, parts(c));
   const sumPrices = (list) => cents(list.reduce((s, c) => s + (Number(c.price) || 0), 0));
@@ -286,7 +287,7 @@
       el("div", { class: "fields" },
         el("label", { class: "f name" }, "Nome do photocard", e.name),
         el("label", { class: "f seller" }, "Onde comprou (vendedor)", e.seller),
-        el("label", { class: "f" }, "Preço (R$)", e.price),
+        (e.priceWrap = el("label", { class: "f" }, "Preço (R$)", e.price)),
         ...e.fees.nodes));
     return e;
   }
@@ -337,18 +338,21 @@
   function formKind() {
     const mode = $("fGroup").value;
     const g = mode && mode !== "new" ? groupsById.get(mode) : null;
-    return { mode, g, t: g ? g.purchase_type : radio("fType") || "individual", o: g ? g.origin : radio("fOrigin") || "nacional" };
+    return { mode, g, gift: $("fGift").checked, t: g ? g.purchase_type : radio("fType") || "individual", o: g ? g.origin : radio("fOrigin") || "nacional" };
   }
   function updateKindFields() {
-    const { mode, g, t, o } = formKind();
-    $("fKind").hidden = !!g;
-    $("fHint").textContent = HINT[t + "-" + o];
+    const { mode, g, gift, t, o } = formKind();
+    $("fTypeWrap").hidden = $("fOriginWrap").hidden = !!g || gift;
+    $("fHint").textContent = gift ? "Presente: o card não tem custo nenhum e vai direto para a aba Chegada." : g ? "" : HINT[t + "-" + o];
+    $("fGroupRow").hidden = gift;
     $("fGroupNameWrap").hidden = mode !== "new";
     $("fGroupName").required = mode === "new";
     $("fGroupFees").hidden = mode !== "new";
     fGroupFees.show(t, o);
     entries.forEach((e, i) => {
-      e.fees.show(t, o, !mode);
+      e.fees.show(t, o, !mode && !gift);
+      e.priceWrap.hidden = gift;
+      e.price.required = !gift;
       e.num.textContent = "Photocard " + (i + 1);
       e.head.hidden = entries.length === 1;
     });
@@ -364,18 +368,20 @@
     updateFormTotal();
   }
   function updateFormTotal() {
-    const { mode, t, o } = formKind();
-    let sum = entries.reduce((s, e) => s + cents(e.price.value) + (mode ? 0 : e.fees.sum(t, o)), 0);
+    const { mode, gift, t, o } = formKind();
+    let sum = gift ? 0 : entries.reduce((s, e) => s + cents(e.price.value) + (mode ? 0 : e.fees.sum(t, o)), 0);
     if (mode === "new") sum += fGroupFees.sum(t, o);
     $("fTotal").textContent = money(sum);
     $("fTotalLabel").textContent = mode === "new" ? "Total do grupo" : mode ? (entries.length > 1 ? "Preço dos cards" : "Preço do card") : "Total";
   }
   document.querySelectorAll("input[name=fType], input[name=fOrigin]").forEach((r) => r.addEventListener("change", updateKindFields));
+  $("fGift").addEventListener("change", () => { if ($("fGift").checked) $("fGroup").value = ""; updateKindFields(); });
 
   function formLabels() {
     const n = entries.length;
     $("fSubmit").textContent = editing ? "Salvar alterações" : n > 1 ? `Cadastrar ${n} photocards` : "Cadastrar photocard";
-    $("formMsg").textContent = editing ? "Editando: " + editing.name : n > 1 ? "Os cards entram na aba Pagamento." : "O card entra na aba Pagamento.";
+    const aba = $("fGift").checked ? "Chegada" : "Pagamento";
+    $("formMsg").textContent = editing ? "Editando: " + editing.name : n > 1 ? `Os cards entram na aba ${aba}.` : `O card entra na aba ${aba}.`;
     $("addTitle").textContent = editing ? "Editar photocard" : n > 1 ? "Cadastrar photocards" : "Cadastrar photocard";
     $("addForm").classList.toggle("editing", !!editing);
   }
@@ -412,6 +418,7 @@
     setRadio("fType", c.purchase_type || "individual");
     setRadio("fOrigin", c.origin || "nacional");
     $("fGroup").value = grp(c) ? c.group_id : "";
+    $("fGift").checked = !!c.gift;
     const src = c.image_path && photoUrls.get(c.image_path);
     if (src) showPhoto(e, src);
     openForm();
@@ -428,7 +435,7 @@
 
   $("addForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const { mode, t, o } = formKind();
+    const { mode, gift, t, o } = formKind();
     const groupName = $("fGroupName").value.trim();
     if (mode === "new" && !groupName) { $("fGroupName").focus(); return; }
     const blank = entries.find((e) => !e.name.value.trim());
@@ -457,8 +464,14 @@
       }));
       // num grupo, os fretes próprios do card não são tocados (ficam guardados)
       const values = (e) => {
-        const v = { name: e.name.value.trim(), seller: e.seller.value.trim() || null, price: cents(e.price.value), group_id: g ? g.id : null };
+        const base = { name: e.name.value.trim(), seller: e.seller.value.trim() || null };
+        // presente: zera os valores e marca tudo como pago
+        if (gift) return { ...base, gift: true, group_id: null, purchase_type: t, origin: o, price: 0, shipping: 0, shipping_to_gom: 0, import_tax: 0,
+          paid_price: true, paid_shipping: true, paid_shipping_to_gom: true, paid_tax: true };
+        const v = { ...base, gift: false, price: cents(e.price.value), group_id: g ? g.id : null };
         if (!g) Object.assign(v, { purchase_type: t, origin: o, ...e.fees.values(t, o) });
+        // deixou de ser presente: os valores voltam a ser pagos normalmente
+        if (target && target.gift) Object.assign(v, { paid_price: false, paid_shipping: false, paid_shipping_to_gom: false, paid_tax: false });
         return v;
       };
       const keepPreview = (e) => { if (e.path && e.previewUrl) { photoUrls.set(e.path, e.previewUrl); e.previewUrl = null; } };
@@ -483,7 +496,7 @@
       }
       const rows = entries.map((e) => {
         const v = { ...values(e), image_path: e.path };
-        if (g) { v.purchase_type = g.purchase_type; v.origin = g.origin; }
+        if (g && !gift) { v.purchase_type = g.purchase_type; v.origin = g.origin; }
         return v;
       });
       const { data, error } = await sb.from("cards").insert(rows).select();
@@ -494,8 +507,8 @@
       const n = data.length;
       saving = false; resetForm(); closeForm();
       const what = n > 1 ? `${n} photocards cadastrados` : "Photocard cadastrado";
-      toast((photoFails ? `${what}, mas ${plural(photoFails, "foto não foi enviada", "fotos não foram enviadas")}.` : `${what} em Pagamento.`) + (g ? ` Grupo: ${g.name}.` : ""));
-      tab = "pay"; render();
+      toast((photoFails ? `${what}, mas ${plural(photoFails, "foto não foi enviada", "fotos não foram enviadas")}.` : `${what} em ${gift ? "Chegada" : "Pagamento"}.`) + (g && !gift ? ` Grupo: ${g.name}.` : ""));
+      tab = gift ? "arr" : "pay"; render();
       signPhotos().then(render);
     } catch (err) {
       if (uploaded.length) sb.storage.from(BUCKET).remove(uploaded);
@@ -557,7 +570,7 @@
       const st = stage(c);
       const when = c.arrived_at ? new Date(c.arrived_at).toLocaleDateString("pt-BR") : "";
       const pill = st === "col" ? el("span", { class: "pill accent", text: when ? "Chegou em " + when : "Na coleção" })
-        : st === "arr" ? el("span", { class: "pill ok", text: "Chegada · pago" })
+        : st === "arr" ? el("span", { class: "pill ok", text: c.gift ? "Chegada · presente" : "Chegada · pago" })
         : el("span", { class: "pill warn", text: c.paid_price ? "Pagamento · faltam os fretes" : "Pagamento · falta o preço" });
       return el("div", { class: "gitem" }, thumb(c),
         el("div", { class: "info" },
@@ -604,7 +617,7 @@
   const STAGE_NAME = { pay: "Pagamento", arr: "Chegada", col: "Coleção" };
   function renderPicker() {
     const q = $("gSearch").value.trim().toLowerCase();
-    const list = cards.filter((c) => !q || c.name.toLowerCase().includes(q))
+    const list = cards.filter((c) => !c.gift && (!q || c.name.toLowerCase().includes(q)))
       .sort((a, b) => gMembers.has(b.id) - gMembers.has(a.id)); // os do grupo primeiro
     const box = $("gPicker");
     if (!list.length) {
@@ -716,6 +729,18 @@
     render();
   }
   $("openGroups").addEventListener("click", openGroups);
+
+  // ---------- botão flutuante do celular ----------
+  function setFab(open) {
+    $("fabMenu").hidden = !open; $("fabShade").hidden = !open;
+    $("fabMain").setAttribute("aria-expanded", String(open));
+    $("fabMain").setAttribute("aria-label", open ? "Fechar opções" : "Abrir opções: cadastrar photocard ou grupos");
+  }
+  $("fabMain").addEventListener("click", () => setFab($("fabMenu").hidden));
+  $("fabShade").addEventListener("click", () => setFab(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("fabMenu").hidden) setFab(false); });
+  $("fabAdd").addEventListener("click", () => { setFab(false); if (editing) resetForm(); openForm(); });
+  $("fabGroups").addEventListener("click", () => { setFab(false); openGroups(); });
   $("gNew").addEventListener("click", () => openGroupForm(null, true));
   $("gBack").addEventListener("click", () => { if (!gSaving) showGroupList(); });
   $("gCancel").addEventListener("click", () => { if (gSaving) return; gFromList ? showGroupList() : closeGroups(); });
@@ -830,6 +855,7 @@
     return box;
   }
   function moneyBlock(c) {
+    if (c.gift) return null; // presente: a etiqueta "Presente" já diz que não tem custo
     const lines = parts(c).flatMap((x) => [el("span", { text: x.label }), el("span", { class: "num", text: money(c[x.key]) })]);
     if (grp(c)) return el("div", { class: "money" }, ...lines, el("span", { class: "note", text: "Fretes e taxa no grupo" }));
     return el("div", { class: "money" }, ...lines,
@@ -862,7 +888,7 @@
     const g = grp(c);
     return el("div", { class: "info" },
       el("span", { class: "title", text: c.name }),
-      inGroup ? null : el("span", { class: "tag" + (g ? " tag-group" : ""), text: g ? "Grupo: " + g.name : kindLabel(c) }),
+      inGroup ? null : el("span", { class: "tag" + (g ? " tag-group" : ""), text: c.gift ? "Presente" : g ? "Grupo: " + g.name : kindLabel(c) }),
       c.seller ? el("span", { class: "from" }, document.createTextNode("Vendedor: "), el("b", { text: c.seller })) : null,
       moneyBlock(c));
   }
@@ -891,10 +917,10 @@
     // num grupo, "voltar" desmarca só o preço do card (os fretes do grupo valem para todos)
     const undo = grp(c) ? { paid_price: false } : { paid_price: false, paid_shipping: false, paid_shipping_to_gom: false, paid_tax: false };
     const status = el("div", { class: "status" },
-      el("span", { class: "pill ok", text: "Pago integralmente" }),
+      el("span", { class: "pill ok", text: c.gift ? "Presente · sem custo" : "Pago integralmente" }),
       el("div", { class: "checks" },
         el("button", { class: "btn-ok", type: "button", text: "Chegou ✓", onclick: () => patch(c, { arrived: true, arrived_at: new Date().toISOString() }, "Foi para a Coleção!") }),
-        el("button", { class: "icon-btn", type: "button", text: "Voltar p/ pagamento", onclick: () => patch(c, undo) })));
+        c.gift ? null : el("button", { class: "icon-btn", type: "button", text: "Voltar p/ pagamento", onclick: () => patch(c, undo) })));
     return el("div", { class: rowClass(inGroup) }, thumb(c), infoBlock(c, inGroup), status, deleteControls(c));
   }
   function rowCol(c, inGroup) {

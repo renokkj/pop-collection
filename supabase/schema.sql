@@ -39,6 +39,9 @@ alter table public.cards
   drop constraint if exists cards_extra_values_check,
   add constraint cards_extra_values_check check (shipping_to_gom >= 0 and import_tax >= 0);
 
+-- 1b2) Presente: card sem custo nenhum, que vai direto para a Chegada.
+alter table public.cards add column if not exists gift boolean not null default false;
+
 -- 1c) Grupos: vários cards da mesma compra.
 --     Os fretes e a taxa ficam no grupo e contam uma vez só, não importa quantos cards ele tenha.
 --     Num card com grupo, valem só o preço e o "preço pago" do card; os fretes próprios dele
