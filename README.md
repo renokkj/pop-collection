@@ -28,8 +28,9 @@ Criei o Pop Collection para resolver um problema meu: acompanhar quanto já pagu
 ## O que o app faz
 
 - **Contas individuais:** cada pessoa só vê os próprios cards.
-- **Cadastro com foto:** pelo botão "+ Cadastrar Photocard", que abre uma janela com nome, vendedor, categoria, preço e fretes. A foto e o vendedor são opcionais.
+- **Cadastro com foto:** pelo botão "+ Cadastrar Photocard", que abre uma janela com nome, vendedor, categoria, preço e fretes. A foto e o vendedor são opcionais. Dá para cadastrar vários cards de uma vez com "+ Adicionar outro photocard".
 - **Categorias de compra:** Individual ou CEG, Nacional ou Internacional. O formulário mostra só os fretes e a taxa de importação (opcional) de cada categoria. Na CEG, você informa só a sua parte do que é dividido.
+- **Grupos de compra:** junte cards da mesma compra num grupo com nome. Os fretes e a taxa de importação ficam no grupo e contam uma vez só, não importa quantos cards ele tenha. Pelo botão "Grupos" dá para criar grupos com cards já cadastrados, adicionar ou tirar cards, renomear e excluir o grupo (os cards continuam cadastrados).
 - **Edição e exclusão:** corrija nome, vendedor, categoria, valores ou foto depois do cadastro, ou exclua um card.
 - **Controle financeiro:** mostra o total gasto, o que já foi pago e o que falta pagar.
 - **Três abas:** Pagamento, Chegada e Coleção, cada uma com a contagem de cards.
@@ -49,9 +50,9 @@ flowchart LR
 ```
 
 1. **Cadastrar:** clique em "+ Cadastrar Photocard", escolha a categoria e preencha os dados do card. O total (preço, fretes e taxa) é calculado sozinho, e o card entra na aba Pagamento.
-2. **Pagamento:** marque cada valor pago (preço, fretes e taxa). O app mostra quanto ainda falta.
-3. **Chegada:** com tudo pago, o card vem para cá. Quando receber, clique em "Chegou ✓". Se marcou algo errado, "Voltar p/ pagamento" desfaz.
-4. **Coleção:** guarda os cards recebidos ("Ainda não chegou" devolve o card para a Chegada). "Apagar coleção" remove esses cards e suas fotos, mas mantém o valor no total gasto.
+2. **Pagamento:** marque cada valor pago (preço, fretes e taxa). O app mostra quanto ainda falta. Num grupo, cada card tem o seu "Preço pago" e os fretes e a taxa são marcados uma vez só, no topo do grupo.
+3. **Chegada:** com tudo pago, o card vem para cá. Quando receber, clique em "Chegou ✓" (ou em "Todos chegaram ✓" no grupo). Se marcou algo errado, "Voltar p/ pagamento" desfaz.
+4. **Coleção:** guarda os cards recebidos, um por um ou organizados por grupo ("Ainda não chegou" devolve o card para a Chegada). "Apagar coleção" remove esses cards e suas fotos, mas mantém o valor no total gasto.
 
 ## Tecnologias
 
@@ -71,9 +72,9 @@ flowchart LR
 
 | Arquivo | O que faz |
 | --- | --- |
-| [`index.html`](index.html) | Telas de login e do app, e a janela de cadastro de photocard |
+| [`index.html`](index.html) | Telas de login e do app, e as janelas de cadastro de photocards e de grupos |
 | [`style.css`](style.css) | Visual (temas claro e escuro) |
-| [`app.js`](app.js) | Contas, cards, fotos e totais |
+| [`app.js`](app.js) | Contas, cards, grupos, fotos e totais |
 | [`config.js`](config.js) | URL e chave `anon` do Supabase |
 | [`supabase/schema.sql`](supabase/schema.sql) | Tabelas, regras de segurança e bucket de fotos |
 

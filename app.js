@@ -19,13 +19,16 @@
   // ---------- estado ----------
   let user = null;
   let cards = [];
+  let groups = []; // grupos de cards da mesma compra
+  let groupsById = new Map();
   let archived = { total: 0, count: 0 };
   let photoUrls = new Map(); // image_path -> signed url
   let tab = "pay";
   try { const t = localStorage.getItem("pc-tab"); if (["pay", "arr", "col"].includes(t)) tab = t; } catch (e) {}
+  let colView = "cards"; // Coleção: "cards" (um por um) ou "groups" (por grupo)
+  try { if (localStorage.getItem("pc-colview") === "groups") colView = "groups"; } catch (e) {}
   let loading = true, confirmClear = false, confirmDelete = null, clearing = false;
   let editing = null, saving = false; // card em edição no formulário
-  let photoBlob = null, photoPreviewUrl = null;
   const busy = new Set();
 
   // ---------- categorias de compra ----------
@@ -45,18 +48,45 @@
   }
   const taxLabel = (t) => (isCeg(t) ? "Taxa de importação · sua parte" : "Taxa de importação");
 
-  // partes que compõem o valor de um card, cada uma com o seu "pago"
-  function parts(c) {
-    const p = [{ key: "price", paid: "paid_price", label: "Preço", check: "Preço pago" }];
-    if (hasToGom(c.purchase_type, c.origin)) p.push({ key: "shipping_to_gom", paid: "paid_shipping_to_gom", label: "Frete até a GOM", check: "Frete até a GOM pago" });
-    if (isIntl(c.origin) && Number(c.import_tax) > 0) p.push({ key: "import_tax", paid: "paid_tax", label: "Taxa de importação", check: "Taxa paga" });
+  // ---------- grupos ----------
+  // Num card com grupo valem só o preço e o "preço pago" do card. Os fretes e a taxa ficam no
+  // grupo e contam uma vez só. Os fretes próprios do card ficam guardados e voltam a contar se
+  // ele sair do grupo.
+  const grp = (c) => (c.group_id && groupsById.get(c.group_id)) || null;
+  const members = (g) => cards.filter((c) => c.group_id === g.id);
+  function setGroups(list) {
+    groups = list;
+    groupsById = new Map(groups.map((g) => [g.id, g]));
+  }
+  const addGroupLocal = (g) => setGroups([g, ...groups.filter((x) => x.id !== g.id)]);
+
+  // fretes e taxa de um card sem grupo ou de um grupo, cada um com o seu "pago"
+  function feeParts(src) {
+    const p = [];
+    if (hasToGom(src.purchase_type, src.origin)) p.push({ key: "shipping_to_gom", paid: "paid_shipping_to_gom", label: "Frete até a GOM", check: "Frete até a GOM pago" });
+    if (isIntl(src.origin) && Number(src.import_tax) > 0) p.push({ key: "import_tax", paid: "paid_tax", label: "Taxa de importação", check: "Taxa paga" });
     p.push({ key: "shipping", paid: "paid_shipping", label: "Frete até você", check: "Frete até você pago" });
     return p;
   }
-  const allPaid = (c) => parts(c).every((x) => c[x.paid]);
+  const sumParts = (src, p) => cents(p.reduce((s, x) => s + (Number(src[x.key]) || 0), 0));
+  const dueParts = (src, p) => cents(p.reduce((s, x) => s + (src[x.paid] ? 0 : Number(src[x.key]) || 0), 0));
+  const fees = (src) => sumParts(src, feeParts(src));
+  const feesDue = (src) => dueParts(src, feeParts(src));
+  const feesPaid = (src) => feeParts(src).every((x) => src[x.paid]);
+
+  // partes que o card paga sozinho: o preço e, se não tiver grupo, os próprios fretes e taxa
+  function parts(c) {
+    const p = [{ key: "price", paid: "paid_price", label: "Preço", check: "Preço pago" }];
+    if (!grp(c)) p.push(...feeParts(c));
+    return p;
+  }
+  const allPaid = (c) => parts(c).every((x) => c[x.paid]) && (!grp(c) || feesPaid(grp(c)));
   const stage = (c) => (c.arrived ? "col" : allPaid(c) ? "arr" : "pay");
-  const total = (c) => cents(parts(c).reduce((s, x) => s + (Number(c[x.key]) || 0), 0));
-  const due = (c) => cents(parts(c).reduce((s, x) => s + (c[x.paid] ? 0 : Number(c[x.key]) || 0), 0));
+  const total = (c) => sumParts(c, parts(c));
+  const due = (c) => dueParts(c, parts(c));
+  const sumPrices = (list) => cents(list.reduce((s, c) => s + (Number(c.price) || 0), 0));
+  const groupTotal = (g) => cents(sumPrices(members(g)) + fees(g));
+  const groupDue = (g) => cents(feesDue(g) + members(g).reduce((s, c) => s + (c.paid_price ? 0 : Number(c.price) || 0), 0));
 
   function toast(msg) {
     const t = $("toast"); t.textContent = msg; t.hidden = false;
@@ -128,7 +158,7 @@
     if (event === "PASSWORD_RECOVERY") { user = session?.user || null; show("resetView"); return; }
     const next = session?.user || null;
     if (next && (!user || user.id !== next.id)) { user = next; enterApp(); }
-    else if (!next) { user = null; cards = []; photoUrls = new Map(); saving = false; closeForm(); resetForm(); setMode("login"); show("authView"); }
+    else if (!next) { user = null; cards = []; setGroups([]); photoUrls = new Map(); saving = false; closeForm(); resetForm(); closeGroups(); setMode("login"); show("authView"); }
   });
 
   function enterApp() {
@@ -138,16 +168,20 @@
     loadAll();
   }
 
+
   // ---------- dados ----------
   async function loadAll() {
     try {
-      const [{ data: rows, error: e1 }, { data: st, error: e2 }] = await Promise.all([
-        sb.from("cards").select("*").order("created_at", { ascending: false }),
+      const [{ data: rows, error: e1 }, { data: st, error: e2 }, { data: gs, error: e3 }] = await Promise.all([
+        sb.from("cards").select("*").order("created_at", { ascending: false }).order("name"),
         sb.from("stats").select("*").maybeSingle(),
+        sb.from("card_groups").select("*").order("created_at", { ascending: false }),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
+      if (e3) throw e3;
       cards = rows || [];
+      setGroups(gs || []);
       archived = { total: Number(st?.archived_total) || 0, count: Number(st?.archived_count) || 0 };
       await signPhotos();
       notice("");
@@ -163,41 +197,46 @@
     (data || []).forEach((d) => { if (d.signedUrl) photoUrls.set(d.path, d.signedUrl); });
   }
 
-  // ---------- formulário ----------
+  // ---------- peças do formulário ----------
   const radio = (name) => (document.querySelector(`input[name=${name}]:checked`) || {}).value;
   const setRadio = (name, v) => document.querySelectorAll(`input[name=${name}]`).forEach((r) => (r.checked = r.value === v));
-  // valores do formulário; campos escondidos pela categoria contam como zero
-  function formValues() {
-    const purchase_type = radio("fType") || "individual", origin = radio("fOrigin") || "nacional";
-    return {
-      purchase_type, origin,
-      price: cents($("fPrice").value),
-      shipping_to_gom: hasToGom(purchase_type, origin) ? cents($("fToGom").value) : 0,
-      import_tax: isIntl(origin) ? cents($("fTax").value) : 0,
-      shipping: cents($("fShip").value),
-    };
-  }
+  const moneyInput = (extra = {}) => el("input", { type: "number", inputmode: "decimal", min: "0", step: "0.01", placeholder: "0,00", ...extra });
   const HINT = {
     "individual-nacional": "Só o frete da GOM até você.",
     "individual-internacional": "Dois fretes: do país de origem até a GOM e da GOM até você. A taxa de importação é opcional e pode ser adicionada depois, em Editar.",
     "ceg-nacional": "O frete da seller até a GOM é dividido: informe só a sua parte. O frete da GOM até você é só seu.",
     "ceg-internacional": "O frete até a GOM e as taxas são divididos conforme as regras da GOM: informe só a sua parte. O frete da GOM até você é só seu.",
   };
-  function updateKindFields() {
-    const t = radio("fType") || "individual", o = radio("fOrigin") || "nacional";
-    $("fToGomWrap").hidden = !hasToGom(t, o);
-    $("fToGomLabel").textContent = toGomLabel(t, o) + " (R$)";
-    $("fTaxWrap").hidden = !isIntl(o);
-    $("fTaxLabel").textContent = taxLabel(t) + " (opcional)";
-    $("fHint").textContent = HINT[t + "-" + o];
-    updateFormTotal();
+
+  // campos de frete e taxa (usados no card sem grupo e no grupo); campos escondidos contam como zero
+  function feeInputs(onInput) {
+    const f = { toGom: moneyInput(), tax: moneyInput(), ship: moneyInput(), toGomLabel: el("span"), taxLabel: el("span") };
+    f.toGomWrap = el("label", { class: "f" }, f.toGomLabel, f.toGom);
+    f.taxWrap = el("label", { class: "f" }, f.taxLabel, f.tax);
+    f.shipWrap = el("label", { class: "f" }, el("span", { text: "Frete da GOM até você (R$)" }), f.ship);
+    f.nodes = [f.toGomWrap, f.taxWrap, f.shipWrap];
+    [f.toGom, f.tax, f.ship].forEach((i) => i.addEventListener("input", onInput));
+    f.show = (t, o, on = true) => {
+      f.toGomWrap.hidden = !on || !hasToGom(t, o);
+      f.toGomLabel.textContent = toGomLabel(t, o) + " (R$)";
+      f.taxWrap.hidden = !on || !isIntl(o);
+      f.taxLabel.textContent = taxLabel(t) + " (opcional)";
+      f.shipWrap.hidden = !on;
+    };
+    f.values = (t, o) => ({
+      shipping_to_gom: hasToGom(t, o) ? cents(f.toGom.value) : 0,
+      import_tax: isIntl(o) ? cents(f.tax.value) : 0,
+      shipping: cents(f.ship.value),
+    });
+    f.sum = (t, o) => { const v = f.values(t, o); return cents(v.shipping_to_gom + v.import_tax + v.shipping); };
+    f.fill = (src) => {
+      f.toGom.value = Number(src.shipping_to_gom) || "";
+      f.tax.value = Number(src.import_tax) || "";
+      f.ship.value = Number(src.shipping) || "";
+    };
+    f.empty = () => !f.toGom.value && !f.tax.value && !f.ship.value;
+    return f;
   }
-  function updateFormTotal() {
-    const v = formValues();
-    $("fTotal").textContent = money(v.price + v.shipping_to_gom + v.import_tax + v.shipping);
-  }
-  ["fPrice", "fToGom", "fTax", "fShip"].forEach((id) => $(id).addEventListener("input", updateFormTotal));
-  document.querySelectorAll("input[name=fType], input[name=fOrigin]").forEach((r) => r.addEventListener("change", updateKindFields));
 
   async function shrink(file) {
     const url = URL.createObjectURL(file);
@@ -210,36 +249,145 @@
       return await new Promise((res) => cv.toBlob(res, "image/jpeg", 0.82));
     } finally { URL.revokeObjectURL(url); }
   }
-  $("fPhoto").addEventListener("change", async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    try {
-      photoBlob = await shrink(file);
-      if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
-      photoPreviewUrl = URL.createObjectURL(photoBlob);
-      showPhoto(photoPreviewUrl);
-    } catch (err) { photoBlob = null; toast("Não deu para ler essa imagem. Tente um JPG ou PNG."); }
-  });
-  function showPhoto(src) {
-    let img = $("drop").querySelector("img");
-    if (!img) { img = document.createElement("img"); img.alt = ""; $("drop").prepend(img); }
-    img.src = src;
-    $("dropText").hidden = true;
+
+  // ---------- cadastro de um ou mais photocards ----------
+  // Cada card tem foto, nome, vendedor e preço próprios. O tipo e a origem valem para todos.
+  // Com grupo, os fretes e a taxa ficam no grupo; sem grupo, cada card tem os seus.
+  let entries = [];
+  let groupTouched = false; // a pessoa mexeu na escolha de grupo
+  const fGroupFees = feeInputs(updateFormTotal);
+  $("fGroupFeeFields").append(...fGroupFees.nodes);
+
+  function makeEntry() {
+    const e = { photoBlob: null, previewUrl: null, path: null };
+    e.name = el("input", { type: "text", placeholder: "ex.: Jisoo · Born Pink · POB Weverse", required: "", maxlength: "120" });
+    e.seller = el("input", { type: "text", list: "sellerList", placeholder: "ex.: GOM, Shopee", maxlength: "80" });
+    e.price = moneyInput({ required: "" });
+    e.price.addEventListener("input", updateFormTotal);
+    e.fees = feeInputs(updateFormTotal);
+    e.file = el("input", { type: "file", accept: "image/*", "aria-label": "Foto do photocard (opcional)" });
+    e.dropText = el("span", {}, "+ foto", el("br"), "(opcional)");
+    e.drop = el("label", { class: "drop", title: "Foto opcional" }, e.dropText, e.file);
+    e.file.addEventListener("change", async () => {
+      const file = e.file.files && e.file.files[0];
+      if (!file) return;
+      try {
+        e.photoBlob = await shrink(file);
+        if (e.previewUrl) URL.revokeObjectURL(e.previewUrl);
+        e.previewUrl = URL.createObjectURL(e.photoBlob);
+        showPhoto(e, e.previewUrl);
+      } catch (err) { e.photoBlob = null; toast("Não deu para ler essa imagem. Tente um JPG ou PNG."); }
+    });
+    e.num = el("span", { class: "entry-n" });
+    e.removeBtn = el("button", { class: "icon-btn", type: "button", text: "Remover", onclick: () => removeEntry(e) });
+    e.head = el("div", { class: "entry-head" }, e.num, e.removeBtn);
+    e.node = el("div", { class: "entry" }, e.head, e.drop,
+      el("div", { class: "fields" },
+        el("label", { class: "f name" }, "Nome do photocard", e.name),
+        el("label", { class: "f seller" }, "Onde comprou (vendedor)", e.seller),
+        el("label", { class: "f" }, "Preço (R$)", e.price),
+        ...e.fees.nodes));
+    return e;
   }
+  function showPhoto(e, src) {
+    let img = e.drop.querySelector("img");
+    if (!img) { img = el("img", { alt: "" }); e.drop.prepend(img); }
+    img.src = src;
+    e.dropText.hidden = true;
+  }
+  function addEntry(focus) {
+    const prev = entries[entries.length - 1];
+    const e = makeEntry();
+    entries.push(e);
+    if (prev && prev.seller.value) e.seller.value = prev.seller.value;
+    $("entries").append(e.node);
+    // dois ou mais cards: sugere juntar num grupo novo, levando os fretes já digitados
+    if (entries.length === 2 && !groupTouched && $("fGroup").value === "") {
+      $("fGroup").value = "new";
+      if (fGroupFees.empty()) fGroupFees.fill(prev.fees.values(radio("fType"), radio("fOrigin")));
+    }
+    updateKindFields();
+    if (focus) e.name.focus();
+  }
+  function removeEntry(e) {
+    if (entries.length < 2) return;
+    if (e.previewUrl) URL.revokeObjectURL(e.previewUrl);
+    e.node.remove();
+    entries = entries.filter((x) => x !== e);
+    updateKindFields();
+  }
+  $("addEntry").addEventListener("click", () => addEntry(true));
+
+  function fillGroupSelect() {
+    const sel = $("fGroup"), cur = sel.value;
+    $("fGroupList").replaceChildren(...groups.map((g) => el("option", { value: g.id, text: g.name })));
+    $("fGroupList").hidden = !groups.length;
+    sel.value = cur === "new" || groupsById.has(cur) ? cur : "";
+  }
+  $("fGroup").addEventListener("change", () => {
+    groupTouched = true;
+    if ($("fGroup").value === "new" && fGroupFees.empty() && entries.length === 1 && !editing)
+      fGroupFees.fill(entries[0].fees.values(radio("fType"), radio("fOrigin")));
+    updateKindFields();
+    if ($("fGroup").value === "new") $("fGroupName").focus();
+  });
+
+  // tipo e origem do que está sendo cadastrado (num grupo existente, vêm do grupo)
+  function formKind() {
+    const mode = $("fGroup").value;
+    const g = mode && mode !== "new" ? groupsById.get(mode) : null;
+    return { mode, g, t: g ? g.purchase_type : radio("fType") || "individual", o: g ? g.origin : radio("fOrigin") || "nacional" };
+  }
+  function updateKindFields() {
+    const { mode, g, t, o } = formKind();
+    $("fKind").hidden = !!g;
+    $("fHint").textContent = HINT[t + "-" + o];
+    $("fGroupNameWrap").hidden = mode !== "new";
+    $("fGroupName").required = mode === "new";
+    $("fGroupFees").hidden = mode !== "new";
+    fGroupFees.show(t, o);
+    entries.forEach((e, i) => {
+      e.fees.show(t, o, !mode);
+      e.num.textContent = "Photocard " + (i + 1);
+      e.head.hidden = entries.length === 1;
+    });
+    $("addEntry").hidden = !!editing;
+    let hint = "";
+    if (g) hint = `${kindLabel(g)}. Os fretes e a taxa já estão no grupo "${g.name}": aqui vai só o preço de cada card.`;
+    else if (mode === "new") hint = "Cada card guarda nome, vendedor, preço e foto. Os fretes e a taxa ficam no grupo.";
+    else if (entries.length > 1) hint = "Sem grupo, cada card tem os próprios fretes.";
+    if (editing && mode && !editing.group_id && fees(editing) > 0)
+      hint += ` Os fretes que estavam neste card (${money(fees(editing))}) ficam guardados, mas deixam de contar enquanto ele estiver no grupo.`;
+    $("fGroupHint").textContent = hint;
+    formLabels();
+    updateFormTotal();
+  }
+  function updateFormTotal() {
+    const { mode, t, o } = formKind();
+    let sum = entries.reduce((s, e) => s + cents(e.price.value) + (mode ? 0 : e.fees.sum(t, o)), 0);
+    if (mode === "new") sum += fGroupFees.sum(t, o);
+    $("fTotal").textContent = money(sum);
+    $("fTotalLabel").textContent = mode === "new" ? "Total do grupo" : mode ? (entries.length > 1 ? "Preço dos cards" : "Preço do card") : "Total";
+  }
+  document.querySelectorAll("input[name=fType], input[name=fOrigin]").forEach((r) => r.addEventListener("change", updateKindFields));
+
   function formLabels() {
-    $("fSubmit").textContent = editing ? "Salvar alterações" : "Cadastrar photocard";
-    $("formMsg").textContent = editing ? "Editando: " + editing.name : "O card entra na aba Pagamento.";
-    $("addTitle").textContent = editing ? "Editar photocard" : "Cadastrar photocard";
+    const n = entries.length;
+    $("fSubmit").textContent = editing ? "Salvar alterações" : n > 1 ? `Cadastrar ${n} photocards` : "Cadastrar photocard";
+    $("formMsg").textContent = editing ? "Editando: " + editing.name : n > 1 ? "Os cards entram na aba Pagamento." : "O card entra na aba Pagamento.";
+    $("addTitle").textContent = editing ? "Editar photocard" : n > 1 ? "Cadastrar photocards" : "Cadastrar photocard";
     $("addForm").classList.toggle("editing", !!editing);
   }
 
   // ---------- janela do formulário ----------
   const dlg = $("addDialog");
   function openForm() {
+    fillGroupSelect();
+    updateKindFields();
     if (!dlg.open) dlg.showModal();
-    $("fName").focus();
+    entries[0].name.focus();
   }
-  // fechar mantém o rascunho de um card novo; uma edição é descartada
+  // fechar mantém o rascunho de cards novos; uma edição é descartada
   function closeForm() {
     if (saving) return;
     if (dlg.open) dlg.close();
@@ -253,77 +401,292 @@
     if (saving) return;
     resetForm();
     editing = c;
-    $("fName").value = c.name;
-    $("fSeller").value = c.seller || "";
+    groupTouched = true;
+    fillGroupSelect();
+    const e = entries[0];
+    e.name.value = c.name;
+    e.seller.value = c.seller || "";
+    e.price.value = Number(c.price);
+    e.fees.fill(c);
     setRadio("fType", c.purchase_type || "individual");
     setRadio("fOrigin", c.origin || "nacional");
-    $("fPrice").value = Number(c.price);
-    $("fToGom").value = Number(c.shipping_to_gom) || "";
-    $("fTax").value = Number(c.import_tax) || "";
-    $("fShip").value = Number(c.shipping);
-    updateKindFields();
+    $("fGroup").value = grp(c) ? c.group_id : "";
     const src = c.image_path && photoUrls.get(c.image_path);
-    if (src) showPhoto(src);
-    formLabels();
+    if (src) showPhoto(e, src);
     openForm();
   }
   $("fCancel").addEventListener("click", closeForm);
   function resetForm() {
-    editing = null; formLabels();
-    $("addForm").reset(); updateKindFields(); photoBlob = null;
-    const img = $("drop").querySelector("img"); if (img) img.remove();
-    if (photoPreviewUrl) { URL.revokeObjectURL(photoPreviewUrl); photoPreviewUrl = null; }
-    $("dropText").hidden = false;
+    editing = null; groupTouched = false;
+    entries.forEach((e) => { if (e.previewUrl) URL.revokeObjectURL(e.previewUrl); });
+    entries = [];
+    $("entries").replaceChildren();
+    $("addForm").reset();
+    addEntry(false);
   }
 
-  $("addForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const name = $("fName").value.trim();
-    if (!name) { $("fName").focus(); return; }
+  $("addForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const { mode, t, o } = formKind();
+    const groupName = $("fGroupName").value.trim();
+    if (mode === "new" && !groupName) { $("fGroupName").focus(); return; }
+    const blank = entries.find((e) => !e.name.value.trim());
+    if (blank) { blank.name.focus(); return; }
     const target = editing;
     saving = true;
     $("fSubmit").disabled = true; $("fCancel").disabled = true; $("formMsg").textContent = "Salvando…";
-    let path = null;
+    let created = null;
+    const uploaded = [];
     try {
-      if (photoBlob) {
-        path = `${user.id}/${crypto.randomUUID()}.jpg`;
-        const { error } = await sb.storage.from(BUCKET).upload(path, photoBlob, { contentType: "image/jpeg" });
-        if (error) { path = null; toast(target ? "A nova foto não foi enviada." : "A foto não foi enviada, mas o card será salvo sem ela."); }
+      if (mode === "new") {
+        const { data, error } = await sb.from("card_groups")
+          .insert({ name: groupName, purchase_type: t, origin: o, ...fGroupFees.values(t, o) }).select().single();
+        if (error) throw error;
+        created = data;
       }
-      const photoFailed = !!photoBlob && !path;
-      const values = { name, seller: $("fSeller").value.trim() || null, ...formValues() };
+      const g = created || (mode ? groupsById.get(mode) : null);
+      let photoFails = 0;
+      await Promise.all(entries.map(async (e) => {
+        e.path = null;
+        if (!e.photoBlob) return;
+        const path = `${user.id}/${crypto.randomUUID()}.jpg`;
+        const { error } = await sb.storage.from(BUCKET).upload(path, e.photoBlob, { contentType: "image/jpeg" });
+        if (error) photoFails++;
+        else { e.path = path; uploaded.push(path); }
+      }));
+      // num grupo, os fretes próprios do card não são tocados (ficam guardados)
+      const values = (e) => {
+        const v = { name: e.name.value.trim(), seller: e.seller.value.trim() || null, price: cents(e.price.value), group_id: g ? g.id : null };
+        if (!g) Object.assign(v, { purchase_type: t, origin: o, ...e.fees.values(t, o) });
+        return v;
+      };
+      const keepPreview = (e) => { if (e.path && e.previewUrl) { photoUrls.set(e.path, e.previewUrl); e.previewUrl = null; } };
+
       if (target) {
         // edição: mantém os pagamentos e a aba do card; a foto só muda se uma nova foi enviada
-        if (path) values.image_path = path;
+        const e = entries[0], v = values(e);
+        if (e.path) v.image_path = e.path;
         const oldPath = target.image_path;
-        const { data, error } = await sb.from("cards").update(values).eq("id", target.id).select().single();
-        if (error) throw error;
-        if (path && oldPath) sb.storage.from(BUCKET).remove([oldPath]);
         const wasStage = stage(target);
+        const { data, error } = await sb.from("cards").update(v).eq("id", target.id).select().single();
+        if (error) throw error;
+        if (created) addGroupLocal(created);
+        if (e.path && oldPath) sb.storage.from(BUCKET).remove([oldPath]);
         Object.assign(target, data);
         const backToPay = wasStage === "arr" && stage(target) === "pay";
-        if (path && photoPreviewUrl) photoUrls.set(path, photoPreviewUrl), (photoPreviewUrl = null);
+        keepPreview(e);
         saving = false; resetForm(); closeForm();
-        toast(photoFailed ? "Dados salvos, mas a nova foto não foi enviada." : backToPay ? "Alterações salvas. O card voltou para Pagamento." : "Alterações salvas.");
+        toast(photoFails ? "Dados salvos, mas a nova foto não foi enviada." : backToPay ? "Alterações salvas. O card voltou para Pagamento." : "Alterações salvas.");
         render();
         return;
       }
-      const { data, error } = await sb.from("cards").insert({ ...values, image_path: path }).select().single();
+      const rows = entries.map((e) => {
+        const v = { ...values(e), image_path: e.path };
+        if (g) { v.purchase_type = g.purchase_type; v.origin = g.origin; }
+        return v;
+      });
+      const { data, error } = await sb.from("cards").insert(rows).select();
       if (error) throw error;
-      if (path && photoPreviewUrl) photoUrls.set(path, photoPreviewUrl), (photoPreviewUrl = null);
-      cards.unshift(data);
+      if (created) addGroupLocal(created);
+      entries.forEach(keepPreview);
+      cards.unshift(...data);
+      const n = data.length;
       saving = false; resetForm(); closeForm();
-      toast("Photocard cadastrado em Pagamento.");
+      const what = n > 1 ? `${n} photocards cadastrados` : "Photocard cadastrado";
+      toast((photoFails ? `${what}, mas ${plural(photoFails, "foto não foi enviada", "fotos não foram enviadas")}.` : `${what} em Pagamento.`) + (g ? ` Grupo: ${g.name}.` : ""));
       tab = "pay"; render();
       signPhotos().then(render);
     } catch (err) {
-      if (path) sb.storage.from(BUCKET).remove([path]);
+      if (uploaded.length) sb.storage.from(BUCKET).remove(uploaded);
+      if (created) sb.from("card_groups").delete().eq("id", created.id);
       toast("Não foi possível salvar. Tente de novo.");
     } finally {
       saving = false;
       $("fSubmit").disabled = false; $("fCancel").disabled = false; formLabels();
     }
   });
+
+  // ---------- janela de grupos (lista + criar/editar) ----------
+  const gdlg = $("groupDialog");
+  const gFees = feeInputs(updateGroupTotal);
+  $("gFeeFields").append(...gFees.nodes);
+  let gEditing = null, gFromList = false, gMembers = new Set(), gSaving = false, gOwnAdded = false;
+
+  function openGroups() { showGroupList(); if (!gdlg.open) gdlg.showModal(); }
+  function closeGroups() { if (!gSaving && gdlg.open) gdlg.close(); }
+  function showGroupList() {
+    gEditing = null;
+    $("gListView").hidden = false; $("gForm").hidden = true; $("gBack").hidden = true;
+    $("gTitle").textContent = "Grupos";
+    renderGroupList();
+  }
+  function renderGroupList() {
+    const box = $("gItems");
+    if (!groups.length) {
+      box.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Nenhum grupo ainda" }),
+        el("span", { text: "Crie um grupo para juntar cards da mesma compra, mesmo que já estejam cadastrados." })));
+      return;
+    }
+    box.replaceChildren(...groups.map((g) => {
+      const m = members(g);
+      return el("div", { class: "gitem" }, stack(m),
+        el("div", { class: "info" },
+          el("span", { class: "title", text: g.name }),
+          el("span", { class: "tag", text: kindLabel(g) }),
+          el("span", { class: "from" }, document.createTextNode(plural(m.length, "card", "cards") + " · "), el("b", { class: "num", text: money(groupTotal(g)) }))),
+        el("button", { class: "btn-ghost", type: "button", text: "Editar", "aria-label": "Editar o grupo " + g.name, onclick: () => openGroupForm(g, true) }));
+    }));
+  }
+  function openGroupForm(g, fromList) {
+    if (saving) return;
+    gEditing = g || null; gFromList = fromList; gOwnAdded = false;
+    gMembers = new Set(g ? members(g).map((c) => c.id) : []);
+    $("gForm").reset();
+    $("gName").value = g ? g.name : "";
+    setRadio("gType", g ? g.purchase_type : "individual");
+    setRadio("gOrigin", g ? g.origin : "nacional");
+    gFees.fill(g || {});
+    $("gTitle").textContent = g ? "Editar grupo" : "Novo grupo";
+    $("gSubmit").textContent = g ? "Salvar grupo" : "Criar grupo";
+    $("gDelete").hidden = !g;
+    $("gDelConfirm").hidden = true;
+    $("gListView").hidden = true; $("gForm").hidden = false; $("gBack").hidden = !fromList;
+    $("gSearch").hidden = cards.length < 8;
+    updateGroupKind();
+    renderPicker();
+    if (!gdlg.open) gdlg.showModal();
+    $("gName").focus();
+  }
+  function gKind() { return { t: radio("gType") || "individual", o: radio("gOrigin") || "nacional" }; }
+  function updateGroupKind() {
+    const { t, o } = gKind();
+    gFees.show(t, o);
+    $("gHint").textContent = HINT[t + "-" + o].replace("em Editar", "em Editar grupo");
+    updateGroupTotal();
+  }
+  document.querySelectorAll("input[name=gType], input[name=gOrigin]").forEach((r) => r.addEventListener("change", updateGroupKind));
+
+  const STAGE_NAME = { pay: "Pagamento", arr: "Chegada", col: "Coleção" };
+  function renderPicker() {
+    const q = $("gSearch").value.trim().toLowerCase();
+    const list = cards.filter((c) => !q || c.name.toLowerCase().includes(q))
+      .sort((a, b) => gMembers.has(b.id) - gMembers.has(a.id)); // os do grupo primeiro
+    const box = $("gPicker");
+    if (!list.length) {
+      box.replaceChildren(el("p", { class: "hint", text: cards.length ? "Nenhum card com esse nome." : "Você ainda não tem cards. Cadastre pelo botão \"+ Cadastrar Photocard\"." }));
+      return;
+    }
+    box.replaceChildren(...list.map((c) => {
+      const input = el("input", { type: "checkbox" });
+      input.checked = gMembers.has(c.id);
+      input.addEventListener("change", () => {
+        input.checked ? gMembers.add(c.id) : gMembers.delete(c.id);
+        item.classList.toggle("on", input.checked);
+        updateGroupTotal();
+      });
+      const other = grp(c) && (!gEditing || c.group_id !== gEditing.id) ? grp(c) : null;
+      const item = el("label", { class: "pick" + (input.checked ? " on" : "") }, input, thumb(c),
+        el("span", { class: "pick-info" },
+          el("span", { class: "title", text: c.name }),
+          el("span", { class: "from", text: [money(c.price), STAGE_NAME[stage(c)], other ? `sai do grupo "${other.name}"` : null].filter(Boolean).join(" · ") })));
+      return item;
+    }));
+  }
+  $("gSearch").addEventListener("input", renderPicker);
+
+  function updateGroupTotal() {
+    const { t, o } = gKind();
+    const sel = cards.filter((c) => gMembers.has(c.id));
+    $("gTotal").textContent = money(sumPrices(sel) + gFees.sum(t, o));
+    $("gCount").textContent = sel.length;
+    // cards sem grupo que tinham fretes próprios: avisa e oferece somar nos fretes do grupo
+    const own = sel.filter((c) => !c.group_id && fees(c) > 0);
+    const box = $("gOwnFees");
+    box.hidden = !own.length;
+    if (!own.length) return;
+    const ownSum = cents(own.reduce((s, c) => s + fees(c), 0));
+    if (gOwnAdded) { box.replaceChildren(el("span", { text: "Somamos os fretes desses cards nos fretes do grupo. Confira os valores acima." })); return; }
+    box.replaceChildren(
+      el("span", { text: `${own.length === 1 ? "1 card marcado tem" : own.length + " cards marcados têm"} fretes próprios (${money(ownSum)}). No grupo eles deixam de contar, mas ficam guardados caso o card saia do grupo.` }),
+      el("button", { class: "btn-ghost", type: "button", text: "Somar nos fretes do grupo", onclick: () => {
+        const add = (input, key) => { const v = cents(cents(input.value) + own.reduce((s, c) => s + (feeParts(c).some((x) => x.key === key) ? Number(c[key]) || 0 : 0), 0)); input.value = v || ""; };
+        add(gFees.toGom, "shipping_to_gom"); add(gFees.tax, "import_tax"); add(gFees.ship, "shipping");
+        gOwnAdded = true; updateGroupTotal();
+      } }));
+  }
+
+  function setGroupBusy(on) {
+    gSaving = on;
+    ["gSubmit", "gCancel", "gDelete"].forEach((id) => ($(id).disabled = on));
+  }
+  $("gForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const name = $("gName").value.trim();
+    if (!name) { $("gName").focus(); return; }
+    const { t, o } = gKind();
+    const values = { name, purchase_type: t, origin: o, ...gFees.values(t, o) };
+    const wasNew = !gEditing;
+    setGroupBusy(true);
+    try {
+      let g;
+      if (gEditing) {
+        const { data, error } = await sb.from("card_groups").update(values).eq("id", gEditing.id).select().single();
+        if (error) throw error;
+        g = Object.assign(gEditing, data);
+      } else {
+        const { data, error } = await sb.from("card_groups").insert(values).select().single();
+        if (error) throw error;
+        g = data; addGroupLocal(g);
+      }
+      const add = cards.filter((c) => gMembers.has(c.id) && c.group_id !== g.id);
+      const rem = cards.filter((c) => c.group_id === g.id && !gMembers.has(c.id));
+      if (add.length) {
+        const { error } = await sb.from("cards").update({ group_id: g.id }).in("id", add.map((c) => c.id));
+        if (error) throw error;
+        add.forEach((c) => (c.group_id = g.id));
+      }
+      if (rem.length) {
+        const { error } = await sb.from("cards").update({ group_id: null }).in("id", rem.map((c) => c.id));
+        if (error) throw error;
+        rem.forEach((c) => (c.group_id = null));
+      }
+      setGroupBusy(false);
+      toast(wasNew ? `Grupo "${g.name}" criado com ${plural(gMembers.size, "card", "cards")}.` : "Grupo salvo.");
+      gFromList ? showGroupList() : closeGroups();
+      render();
+    } catch (err) {
+      setGroupBusy(false);
+      toast("Não foi possível salvar o grupo. Tente de novo.");
+      loadAll();
+    }
+  });
+  $("gDelete").addEventListener("click", () => {
+    const g = gEditing; if (!g) return;
+    const n = members(g).length, f = fees(g);
+    $("gDelConfirm").replaceChildren(
+      el("span", { text: `Excluir o grupo "${g.name}"? ${n === 1 ? "O card continua cadastrado, só fica sem grupo." : n ? `Os ${n} cards continuam cadastrados, só ficam sem grupo.` : ""}${f > 0 ? ` Os fretes e a taxa do grupo (${money(f)}) deixam de ser somados.` : ""}` }),
+      el("button", { class: "btn-danger", type: "button", style: "background:var(--danger);color:var(--surface)", text: "Sim, excluir grupo", onclick: () => deleteGroup(g) }),
+      el("button", { class: "btn-ghost", type: "button", text: "Cancelar", onclick: () => ($("gDelConfirm").hidden = true) }));
+    $("gDelConfirm").hidden = false;
+  });
+  async function deleteGroup(g) {
+    setGroupBusy(true);
+    const { error } = await sb.from("card_groups").delete().eq("id", g.id);
+    setGroupBusy(false);
+    if (error) { toast("Não foi possível excluir o grupo."); return; }
+    cards.forEach((c) => { if (c.group_id === g.id) c.group_id = null; });
+    setGroups(groups.filter((x) => x.id !== g.id));
+    toast("Grupo excluído. Os cards continuam cadastrados.");
+    gFromList ? showGroupList() : closeGroups();
+    render();
+  }
+  $("openGroups").addEventListener("click", openGroups);
+  $("gNew").addEventListener("click", () => openGroupForm(null, true));
+  $("gBack").addEventListener("click", () => { if (!gSaving) showGroupList(); });
+  $("gCancel").addEventListener("click", () => { if (gSaving) return; gFromList ? showGroupList() : closeGroups(); });
+  $("gClose").addEventListener("click", closeGroups);
+  gdlg.addEventListener("cancel", (e) => { if (gSaving) e.preventDefault(); });
+  gdlg.addEventListener("click", (e) => { if (e.target === gdlg) closeGroups(); });
 
   // ---------- abas ----------
   function setTab(t) {
@@ -332,6 +695,11 @@
     render();
   }
   document.querySelectorAll("#mainTabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  function setColView(v) {
+    colView = v;
+    try { localStorage.setItem("pc-colview", v); } catch (e) {}
+    render();
+  }
 
   // ---------- ações ----------
   async function patch(c, changes, msg) {
@@ -343,6 +711,37 @@
     busy.delete(c.id);
     if (error) { Object.assign(c, before); toast("Não foi possível atualizar. Tente de novo."); }
     else if (msg) toast(msg);
+    render();
+  }
+  // muda vários cards de uma vez (ex.: "Todos chegaram")
+  async function patchMany(list, changes, msg) {
+    const ids = list.map((c) => c.id).filter((id) => !busy.has(id));
+    if (!ids.length) return;
+    const sel = list.filter((c) => ids.includes(c.id));
+    ids.forEach((id) => busy.add(id));
+    const before = sel.map((c) => ({ ...c }));
+    sel.forEach((c) => Object.assign(c, changes)); render();
+    const { error } = await sb.from("cards").update(changes).in("id", ids);
+    ids.forEach((id) => busy.delete(id));
+    if (error) { sel.forEach((c, i) => Object.assign(c, before[i])); toast("Não foi possível atualizar. Tente de novo."); }
+    else if (msg) toast(msg);
+    render();
+  }
+  // fretes e taxa do grupo: marcar como pago vale para todos os cards dele
+  async function patchGroup(g, changes) {
+    const key = "g:" + g.id;
+    if (busy.has(key)) return;
+    busy.add(key);
+    const before = { ...g };
+    const wasPay = members(g).filter((c) => stage(c) === "pay");
+    Object.assign(g, changes); render();
+    const { error } = await sb.from("card_groups").update(changes).eq("id", g.id);
+    busy.delete(key);
+    if (error) { Object.assign(g, before); toast("Não foi possível atualizar. Tente de novo."); }
+    else {
+      const moved = wasPay.filter((c) => stage(c) === "arr").length;
+      if (moved) toast(`Tudo pago! ${moved === 1 ? "1 card foi" : moved + " cards foram"} para Chegada.`);
+    }
     render();
   }
   async function removeCard(c) {
@@ -384,10 +783,28 @@
     else box.append(el("span", { text: (c.name || "?").trim().charAt(0).toUpperCase() }));
     return box;
   }
+  // pilha com até 3 fotos dos cards do grupo
+  function stack(list) {
+    const box = el("div", { class: "stack", "aria-hidden": "true" });
+    const top = list.slice(0, 3);
+    if (!top.length) box.append(el("span"));
+    top.forEach((c) => {
+      const src = c.image_path && photoUrls.get(c.image_path);
+      box.append(el("span", {}, src ? el("img", { src, alt: "", loading: "lazy" }) : null));
+    });
+    return box;
+  }
   function moneyBlock(c) {
     const lines = parts(c).flatMap((x) => [el("span", { text: x.label }), el("span", { class: "num", text: money(c[x.key]) })]);
+    if (grp(c)) return el("div", { class: "money" }, ...lines, el("span", { class: "note", text: "Fretes e taxa no grupo" }));
     return el("div", { class: "money" }, ...lines,
       el("span", { class: "tot", text: "Total" }), el("span", { class: "num tot", text: money(total(c)) }));
+  }
+  function groupMoney(g, m) {
+    const lines = [el("span", { text: `Photocards (${m.length})` }), el("span", { class: "num", text: money(sumPrices(m)) })];
+    feeParts(g).forEach((x) => lines.push(el("span", { text: x.label }), el("span", { class: "num", text: money(g[x.key]) })));
+    return el("div", { class: "money" }, ...lines,
+      el("span", { class: "tot", text: "Total do grupo" }), el("span", { class: "num tot", text: money(groupTotal(g)) }));
   }
   function check(label, on, fn) {
     const input = el("input", { type: "checkbox" }); input.checked = !!on;
@@ -405,11 +822,15 @@
       editButton(c),
       el("button", { class: "icon-btn", type: "button", text: "Excluir", "aria-label": "Excluir " + c.name, onclick: () => { confirmDelete = c.id; render(); } }));
   }
-  const infoBlock = (c) => el("div", { class: "info" },
-    el("span", { class: "title", text: c.name }),
-    el("span", { class: "tag", text: kindLabel(c) }),
-    c.seller ? el("span", { class: "from" }, document.createTextNode("Vendedor: "), el("b", { text: c.seller })) : null,
-    moneyBlock(c));
+  // dentro do bloco do grupo o card não repete a categoria; solto, mostra o grupo a que pertence
+  function infoBlock(c, inGroup) {
+    const g = grp(c);
+    return el("div", { class: "info" },
+      el("span", { class: "title", text: c.name }),
+      inGroup ? null : el("span", { class: "tag" + (g ? " tag-group" : ""), text: g ? "Grupo: " + g.name : kindLabel(c) }),
+      c.seller ? el("span", { class: "from" }, document.createTextNode("Vendedor: "), el("b", { text: c.seller })) : null,
+      moneyBlock(c));
+  }
 
   // sugestões do campo "Onde comprou": lojas comuns + vendedores que a pessoa já usou
   const COMMON_SELLERS = ["GOM", "Shopee", "Mercado Livre", "Instagram", "X (Twitter)", "Weverse Shop", "Ktown4u", "AliExpress", "Amazon", "Vinted"];
@@ -420,27 +841,64 @@
     $("sellerList").replaceChildren(...[...seen.values()].map((v) => el("option", { value: v })));
   }
 
-  function rowPay(c) {
+  const rowClass = (inGroup) => "row" + (inGroup ? " sub" : "");
+  function rowPay(c, inGroup) {
+    const d = due(c);
     const status = el("div", { class: "status" },
       el("div", { class: "checks" },
         ...parts(c).map((x) => check(x.check, c[x.paid], (v) => patch(c, { [x.paid]: v }, v && allPaid({ ...c, [x.paid]: v }) ? "Tudo pago! Foi para Chegada." : null)))),
-      el("span", { class: "pill warn" }, document.createTextNode("Falta pagar "), el("b", { class: "num", text: money(due(c)) })));
-    return el("div", { class: "row" }, thumb(c), infoBlock(c), status, deleteControls(c));
+      d > 0 || !grp(c)
+        ? el("span", { class: "pill warn" }, document.createTextNode("Falta pagar "), el("b", { class: "num", text: money(d) }))
+        : el("span", { class: "pill warn", text: "Aguardando fretes do grupo" }));
+    return el("div", { class: rowClass(inGroup) }, thumb(c), infoBlock(c, inGroup), status, deleteControls(c));
   }
-  function rowArr(c) {
+  function rowArr(c, inGroup) {
+    // num grupo, "voltar" desmarca só o preço do card (os fretes do grupo valem para todos)
+    const undo = grp(c) ? { paid_price: false } : { paid_price: false, paid_shipping: false, paid_shipping_to_gom: false, paid_tax: false };
     const status = el("div", { class: "status" },
       el("span", { class: "pill ok", text: "Pago integralmente" }),
       el("div", { class: "checks" },
         el("button", { class: "btn-ok", type: "button", text: "Chegou ✓", onclick: () => patch(c, { arrived: true, arrived_at: new Date().toISOString() }, "Foi para a Coleção!") }),
-        el("button", { class: "icon-btn", type: "button", text: "Voltar p/ pagamento", onclick: () => patch(c, { paid_price: false, paid_shipping: false, paid_shipping_to_gom: false, paid_tax: false }) })));
-    return el("div", { class: "row" }, thumb(c), infoBlock(c), status, deleteControls(c));
+        el("button", { class: "icon-btn", type: "button", text: "Voltar p/ pagamento", onclick: () => patch(c, undo) })));
+    return el("div", { class: rowClass(inGroup) }, thumb(c), infoBlock(c, inGroup), status, deleteControls(c));
   }
-  function rowCol(c) {
+  function rowCol(c, inGroup) {
     const when = c.arrived_at ? new Date(c.arrived_at).toLocaleDateString("pt-BR") : "";
     const status = el("div", { class: "status" },
       el("span", { class: "pill accent", text: when ? "Chegou em " + when : "Na coleção" }),
       el("button", { class: "icon-btn", type: "button", style: "width:fit-content;padding-left:0", text: "Ainda não chegou", onclick: () => patch(c, { arrived: false, arrived_at: null }) }));
-    return el("div", { class: "row" }, thumb(c), infoBlock(c), status, el("div", { class: "actions" }, editButton(c)));
+    return el("div", { class: rowClass(inGroup) }, thumb(c), infoBlock(c, inGroup), status, el("div", { class: "actions" }, editButton(c)));
+  }
+
+  // cabeçalho do grupo em cada aba: nome, valores compartilhados e o andamento dos cards
+  function groupHead(g, here) {
+    const m = members(g);
+    const info = el("div", { class: "info" },
+      el("span", { class: "title", text: g.name }),
+      el("span", { class: "tag tag-group", text: "Grupo · " + kindLabel(g) }),
+      groupMoney(g, m));
+    const status = el("div", { class: "status" });
+    const note = (text) => status.append(el("span", { class: "from", text }));
+    const countIn = (s) => m.filter((c) => stage(c) === s).length;
+    if (tab === "pay") {
+      const d = groupDue(g);
+      status.append(
+        el("div", { class: "checks" }, ...feeParts(g).map((x) => check(x.check, g[x.paid], (v) => patchGroup(g, { [x.paid]: v })))),
+        d > 0 ? el("span", { class: "pill warn" }, document.createTextNode("Falta pagar no grupo "), el("b", { class: "num", text: money(d) }))
+          : el("span", { class: "pill ok", text: "Grupo pago" }));
+      if (!m.length) note("Nenhum card neste grupo ainda. Adicione em Editar grupo.");
+      else if (here.length < m.length) note(`${m.length - here.length} de ${m.length} cards já saíram de Pagamento.`);
+    } else if (tab === "arr") {
+      const arrived = countIn("col"), waiting = countIn("pay");
+      status.append(el("span", { class: "pill ok", text: "Fretes e taxa pagos" }));
+      note(`${arrived} de ${plural(m.length, "card chegou", "cards chegaram")}` + (waiting ? ` · ${waiting} ainda em Pagamento` : ""));
+      if (here.length > 1) status.append(el("button", { class: "btn-ok", type: "button", style: "width:fit-content", text: `Todos os ${here.length} chegaram ✓`,
+        onclick: () => patchMany(here, { arrived: true, arrived_at: new Date().toISOString() }, `${here.length} cards foram para a Coleção!`) }));
+    } else {
+      status.append(el("span", { class: "pill accent", text: `${here.length} de ${m.length} na coleção` }));
+    }
+    return el("div", { class: "row ghead" }, stack(m), info, status,
+      el("div", { class: "actions" }, el("button", { class: "icon-btn", type: "button", text: "Editar grupo", "aria-label": "Editar o grupo " + g.name, onclick: () => openGroupForm(g, false) })));
   }
 
   const HEAD = { pay: "Pagamento", arr: "Chegada", col: "Status" };
@@ -449,38 +907,63 @@
     arr: ["Nenhum card a caminho", "Quando tudo estiver pago, o card vem para cá esperando chegar."],
     col: ["Sua coleção está vazia", "Cards marcados como \"Chegou\" ficam guardados aqui."],
   };
-  const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+  function plural(n, s, p) { return `${n} ${n === 1 ? s : p}`; }
 
   function render() {
     updateSellerList();
-    const groups = { pay: [], arr: [], col: [] };
-    cards.forEach((c) => groups[stage(c)].push(c));
+    const byStage = { pay: [], arr: [], col: [] };
+    cards.forEach((c) => byStage[stage(c)].push(c));
 
-    const live = cards.reduce((s, c) => s + total(c), 0);
+    // fretes e taxas de grupo entram uma vez só
+    const live = cards.reduce((s, c) => s + total(c), 0) + groups.reduce((s, g) => s + fees(g), 0);
     const all = cents(live + archived.total);
-    const dueSum = cents(cards.reduce((s, c) => s + due(c), 0));
+    const dueSum = cents(cards.reduce((s, c) => s + due(c), 0) + groups.reduce((s, g) => s + feesDue(g), 0));
     const n = cards.length + archived.count;
-    const quit = groups.arr.length + groups.col.length;
+    const quit = byStage.arr.length + byStage.col.length;
     $("sTotal").textContent = money(all);
     $("sTotalSub").textContent = plural(n, "card", "cards") + (archived.count ? ` · inclui ${archived.count} de coleções apagadas` : " · preço, fretes e taxas");
     $("sPaid").textContent = money(all - dueSum);
     $("sPaidSub").textContent = plural(quit, "quitado", "quitados");
     $("sDue").textContent = money(dueSum);
-    $("sDueSub").textContent = `${groups.pay.length} em aberto`;
-    $("cPay").textContent = groups.pay.length; $("cArr").textContent = groups.arr.length; $("cCol").textContent = groups.col.length;
+    $("sDueSub").textContent = `${byStage.pay.length} em aberto`;
+    $("cPay").textContent = byStage.pay.length; $("cArr").textContent = byStage.arr.length; $("cCol").textContent = byStage.col.length;
     document.querySelectorAll("#mainTabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+    if (gdlg.open && !$("gListView").hidden) renderGroupList();
 
     const panel = $("panel"); panel.replaceChildren();
-    const list = groups[tab];
+    const list = byStage[tab];
+
+    // monta a lista: cards soltos e blocos de grupo, na ordem do card mais recente
+    const grouped = tab !== "col" || colView === "groups";
+    const items = [], blocks = new Map();
+    list.forEach((c) => {
+      const g = grouped && grp(c);
+      if (!g) { items.push({ card: c }); return; }
+      let it = blocks.get(g.id);
+      if (!it) { it = { g, cards: [] }; blocks.set(g.id, it); items.push(it); }
+      it.cards.push(c);
+    });
+    // em Pagamento, grupos com frete ou taxa em aberto aparecem mesmo sem cards aqui
+    if (tab === "pay") groups.filter((g) => !blocks.has(g.id) && !feesPaid(g)).reverse().forEach((g) => items.unshift({ g, cards: [] }));
 
     if (tab === "col") {
-      const colTotal = list.reduce((s, c) => s + total(c), 0);
+      // grupo com todos os cards na coleção: os fretes e a taxa entram no valor da coleção
+      const full = groups.filter((g) => { const m = members(g); return m.length && m.every((c) => stage(c) === "col"); });
+      const colTotal = list.reduce((s, c) => s + total(c), 0) + full.reduce((s, g) => s + fees(g), 0);
+      const viewSeg = groups.length ? el("div", { class: "seg", role: "radiogroup", "aria-label": "Ver a coleção" },
+        ...[["cards", "Cards"], ["groups", "Por grupo"]].map(([v, label]) => {
+          const r = el("input", { type: "radio", name: "colView", value: v });
+          r.checked = colView === v;
+          r.addEventListener("change", () => setColView(v));
+          return el("label", {}, r, el("span", { text: label }));
+        })) : null;
       panel.append(el("div", { class: "panel-head" },
         el("p", {}, document.createTextNode(plural(list.length, "card", "cards") + " · "), el("span", { class: "num", text: money(colTotal) })),
-        list.length && !confirmClear ? el("button", { class: "btn-danger", type: "button", text: "Apagar coleção", onclick: () => { confirmClear = true; render(); } }) : null));
+        el("div", { class: "panel-tools" }, viewSeg,
+          list.length && !confirmClear ? el("button", { class: "btn-danger", type: "button", text: "Apagar coleção", onclick: () => { confirmClear = true; render(); } }) : null)));
       if (confirmClear) {
         panel.append(el("div", { class: "confirm" },
-          el("span", { text: `Apagar os ${plural(list.length, "card", "cards")} da coleção e suas fotos? O valor continua somado no total gasto.` }),
+          el("span", { text: `Apagar os ${plural(list.length, "card", "cards")} da coleção e suas fotos? O valor continua somado no total gasto.` + (full.length ? ` ${full.length === 1 ? "O grupo que fica vazio também é apagado" : "Os grupos que ficam vazios também são apagados"}.` : "") }),
           el("button", { class: "btn-danger", type: "button", style: "background:var(--danger);color:var(--surface)", disabled: clearing ? "" : null, text: clearing ? "Apagando…" : "Sim, apagar", onclick: clearCollection }),
           el("button", { class: "btn-ghost", type: "button", text: "Cancelar", onclick: () => { confirmClear = false; render(); } })));
       }
@@ -489,18 +972,20 @@
     const table = el("div", { class: "table" });
     if (loading) {
       table.append(el("div", { class: "empty" }, el("strong", { text: "Carregando seus cards…" })));
-    } else if (!list.length) {
+    } else if (!items.length) {
       const [t, s] = EMPTY[tab];
       table.append(el("div", { class: "empty" }, el("strong", { text: t }), el("span", { text: s })));
     } else {
       table.append(el("div", { class: "thead" }, el("span", { text: "Foto" }), el("span", { text: "Card · Valores" }), el("span", { text: HEAD[tab] }), el("span", {})));
       const fn = tab === "pay" ? rowPay : tab === "arr" ? rowArr : rowCol;
-      list.forEach((c) => table.append(fn(c)));
+      items.forEach((it) => table.append(it.g
+        ? el("div", { class: "group" }, groupHead(it.g, it.cards), ...it.cards.map((c) => fn(c, true)))
+        : fn(it.card, false)));
     }
     panel.append(table);
   }
 
   setMode("login");
-  updateKindFields();
+  resetForm();
   sb.auth.getSession().then(({ data }) => { if (!data.session) show("authView"); });
 })();

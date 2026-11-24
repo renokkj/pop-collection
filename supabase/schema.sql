@@ -39,6 +39,37 @@ alter table public.cards
   drop constraint if exists cards_extra_values_check,
   add constraint cards_extra_values_check check (shipping_to_gom >= 0 and import_tax >= 0);
 
+-- 1c) Grupos: vários cards da mesma compra.
+--     Os fretes e a taxa ficam no grupo e contam uma vez só, não importa quantos cards ele tenha.
+--     Num card com grupo, valem só o preço e o "preço pago" do card; os fretes próprios dele
+--     ficam guardados (voltam a contar se ele sair do grupo).
+--     Apagar um grupo não apaga os cards: eles só ficam sem grupo.
+--     Cards antigos continuam sem grupo, com os próprios fretes.
+create table if not exists public.card_groups (
+  id                   uuid primary key default gen_random_uuid(),
+  user_id              uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  name                 text not null check (char_length(name) between 1 and 80),
+  purchase_type        text not null default 'individual' check (purchase_type in ('individual', 'ceg')),
+  origin               text not null default 'nacional' check (origin in ('nacional', 'internacional')),
+  shipping             numeric(10,2) not null default 0 check (shipping >= 0),
+  shipping_to_gom      numeric(10,2) not null default 0 check (shipping_to_gom >= 0),
+  import_tax           numeric(10,2) not null default 0 check (import_tax >= 0),
+  paid_shipping        boolean not null default false,
+  paid_shipping_to_gom boolean not null default false,
+  paid_tax             boolean not null default false,
+  created_at           timestamptz not null default now(),
+  unique (id, user_id)
+);
+create index if not exists card_groups_user_idx on public.card_groups (user_id, created_at desc);
+
+-- o card só pode entrar num grupo do mesmo dono; apagar o grupo só tira o card dele
+alter table public.cards add column if not exists group_id uuid;
+alter table public.cards
+  drop constraint if exists cards_group_fk,
+  add constraint cards_group_fk foreign key (group_id, user_id)
+    references public.card_groups (id, user_id) on delete set null (group_id);
+create index if not exists cards_group_idx on public.cards (group_id);
+
 -- 2) Total já gasto com coleções apagadas (para o "total gasto" não zerar)
 create table if not exists public.stats (
   user_id        uuid primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -49,9 +80,16 @@ create table if not exists public.stats (
 -- 3) Segurança: cada usuário só lê e altera os próprios dados
 alter table public.cards enable row level security;
 alter table public.stats enable row level security;
+alter table public.card_groups enable row level security;
 
 drop policy if exists "cards do dono" on public.cards;
 create policy "cards do dono" on public.cards
+  for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists "grupos do dono" on public.card_groups;
+create policy "grupos do dono" on public.card_groups
   for all to authenticated
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
@@ -63,6 +101,8 @@ create policy "stats do dono" on public.stats
   with check (user_id = auth.uid());
 
 -- 4) Apagar coleção: soma o valor no histórico e apaga os cards que chegaram.
+--    Num card com grupo conta só o preço; os fretes e a taxa do grupo entram no histórico
+--    quando todos os cards do grupo saem junto (aí o grupo, vazio, também é apagado).
 --    Devolve os caminhos das fotos para o app apagar do Storage.
 create or replace function public.clear_collection()
 returns text[]
@@ -71,11 +111,14 @@ security invoker
 set search_path = public
 as $$
 declare
-  v_total numeric(12,2);
-  v_count integer;
-  v_paths text[];
+  v_total  numeric(12,2);
+  v_count  integer;
+  v_paths  text[];
+  v_groups uuid[];
+  v_fees   numeric(12,2);
 begin
-  select coalesce(sum(price + shipping + shipping_to_gom + import_tax), 0), count(*),
+  select coalesce(sum(price + case when group_id is null then shipping + shipping_to_gom + import_tax else 0 end), 0),
+         count(*),
          coalesce(array_agg(image_path) filter (where image_path is not null), '{}')
     into v_total, v_count, v_paths
     from cards
@@ -85,13 +128,22 @@ begin
     return '{}';
   end if;
 
+  -- grupos em que todos os cards chegaram
+  select coalesce(array_agg(g.id), '{}'), coalesce(sum(g.shipping + g.shipping_to_gom + g.import_tax), 0)
+    into v_groups, v_fees
+    from card_groups g
+   where g.user_id = auth.uid()
+     and exists (select 1 from cards c where c.group_id = g.id and c.arrived)
+     and not exists (select 1 from cards c where c.group_id = g.id and not c.arrived);
+
   insert into stats (user_id, archived_total, archived_count)
-  values (auth.uid(), v_total, v_count)
+  values (auth.uid(), v_total + v_fees, v_count)
   on conflict (user_id) do update
     set archived_total = stats.archived_total + excluded.archived_total,
         archived_count = stats.archived_count + excluded.archived_count;
 
   delete from cards where user_id = auth.uid() and arrived;
+  delete from card_groups where user_id = auth.uid() and id = any (v_groups);
   return v_paths;
 end;
 $$;

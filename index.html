@@ -6,7 +6,7 @@
 <title>Pop Collection</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -64,7 +64,7 @@
   <div id="notice" class="notice" hidden></div>
 
   <section class="summary" aria-label="Resumo de gastos">
-    <div class="big"><span class="label">Total gasto com photocards</span><span class="value" id="sTotal">R$ 0,00</span><span class="sub" id="sTotalSub">preço, fretes e taxas de todos os cards</span></div>
+    <div class="big"><span class="label">Total gasto com photocards</span><span class="value" id="sTotal">R$ 0,00</span><span class="sub" id="sTotalSub">preço, fretes e taxas de todos os cards e grupos</span></div>
     <div><span class="label">Já pago</span><span class="value" id="sPaid">R$ 0,00</span><span class="sub" id="sPaidSub">&nbsp;</span></div>
     <div><span class="label">Falta pagar</span><span class="value" id="sDue">R$ 0,00</span><span class="sub" id="sDueSub">&nbsp;</span></div>
   </section>
@@ -75,12 +75,13 @@
       <button type="button" role="tab" data-tab="arr" aria-selected="false">Chegada <span class="count" id="cArr">0</span></button>
       <button type="button" role="tab" data-tab="col" aria-selected="false">Coleção <span class="count" id="cCol">0</span></button>
     </nav>
+    <button class="btn-ghost btn-groups" type="button" id="openGroups" aria-haspopup="dialog">Grupos</button>
     <button class="btn-primary btn-add" type="button" id="openAdd" aria-haspopup="dialog">+ Cadastrar Photocard</button>
   </div>
 
   <section class="panel" id="panel"></section>
 
-  <!-- Cadastro / edição de photocard (abre pelo botão "+ Cadastrar Photocard" ou por Editar) -->
+  <!-- Cadastro / edição de photocards (abre pelo botão "+ Cadastrar Photocard" ou por Editar) -->
   <dialog class="sheet" id="addDialog" aria-labelledby="addTitle">
     <div class="sheet-box">
       <div class="sheet-head">
@@ -88,52 +89,107 @@
         <button class="icon-btn sheet-close" type="button" id="addClose" aria-label="Fechar">✕</button>
       </div>
       <form class="add" id="addForm" autocomplete="off">
-        <label class="drop" id="drop" title="Foto opcional">
-          <span id="dropText">+ foto<br>(opcional)</span>
-          <input type="file" id="fPhoto" accept="image/*" aria-label="Foto do photocard (opcional)">
-        </label>
-        <div class="fields">
-          <label class="f name">Nome do photocard
-            <input type="text" id="fName" placeholder="ex.: Jisoo · Born Pink · POB Weverse" required maxlength="120">
-          </label>
-          <label class="f seller">Onde comprou (vendedor)
-            <input type="text" id="fSeller" list="sellerList" placeholder="ex.: GOM, Shopee" maxlength="80">
-            <datalist id="sellerList"></datalist>
-          </label>
-          <div class="kind">
-            <div class="f"><span id="lType">Tipo de compra</span>
-              <div class="seg" role="radiogroup" aria-labelledby="lType">
-                <label><input type="radio" name="fType" value="individual" checked><span>Individual</span></label>
-                <label><input type="radio" name="fType" value="ceg"><span title="Compra em grupo">CEG</span></label>
-              </div>
+        <div class="kind" id="fKind">
+          <div class="f"><span id="lType">Tipo de compra</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lType">
+              <label><input type="radio" name="fType" value="individual" checked><span>Individual</span></label>
+              <label><input type="radio" name="fType" value="ceg"><span title="Compra em grupo">CEG</span></label>
             </div>
-            <div class="f"><span id="lOrigin">Origem</span>
-              <div class="seg" role="radiogroup" aria-labelledby="lOrigin">
-                <label><input type="radio" name="fOrigin" value="nacional" checked><span>Nacional</span></label>
-                <label><input type="radio" name="fOrigin" value="internacional"><span>Internacional</span></label>
-              </div>
-            </div>
-            <p class="hint" id="fHint"></p>
           </div>
-          <label class="f">Preço (R$)
-            <input type="number" id="fPrice" inputmode="decimal" min="0" step="0.01" placeholder="0,00" required>
-          </label>
-          <label class="f" id="fToGomWrap" hidden><span id="fToGomLabel">Frete até a GOM (R$)</span>
-            <input type="number" id="fToGom" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
-          </label>
-          <label class="f" id="fTaxWrap" hidden><span id="fTaxLabel">Taxa de importação (opcional)</span>
-            <input type="number" id="fTax" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
-          </label>
-          <label class="f">Frete da GOM até você (R$)
-            <input type="number" id="fShip" inputmode="decimal" min="0" step="0.01" placeholder="0,00">
-          </label>
-          <div class="f" aria-live="polite"><span>Total</span><span class="num" id="fTotal" style="font-size:1.05rem;color:var(--fg);padding:8px 0">R$ 0,00</span></div>
-          <div class="form-foot">
-            <span class="total-preview" id="formMsg">O card entra na aba Pagamento.</span>
-            <div class="form-btns">
-              <button class="btn-ghost" type="button" id="fCancel">Cancelar</button>
-              <button class="btn-primary" type="submit" id="fSubmit">Cadastrar photocard</button>
+          <div class="f"><span id="lOrigin">Origem</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lOrigin">
+              <label><input type="radio" name="fOrigin" value="nacional" checked><span>Nacional</span></label>
+              <label><input type="radio" name="fOrigin" value="internacional"><span>Internacional</span></label>
             </div>
+          </div>
+          <p class="hint" id="fHint"></p>
+        </div>
+        <div class="grouprow">
+          <label class="f">Grupo
+            <select id="fGroup">
+              <option value="">Sem grupo</option>
+              <option value="new">+ Novo grupo</option>
+              <optgroup label="Seus grupos" id="fGroupList"></optgroup>
+            </select>
+          </label>
+          <label class="f" id="fGroupNameWrap" hidden>Nome do grupo
+            <input type="text" id="fGroupName" placeholder="ex.: Compra de novembro" maxlength="80">
+          </label>
+          <p class="hint" id="fGroupHint"></p>
+        </div>
+        <div class="entries" id="entries"></div>
+        <button class="btn-ghost btn-more" type="button" id="addEntry">+ Adicionar outro photocard</button>
+        <fieldset class="gfees" id="fGroupFees" hidden>
+          <legend>Fretes e taxas do grupo</legend>
+          <p class="hint">Contam uma vez só, para todos os cards do grupo.</p>
+          <div class="fields" id="fGroupFeeFields"></div>
+        </fieldset>
+        <div class="form-foot">
+          <div class="form-total" aria-live="polite"><span id="fTotalLabel">Total</span> <b class="num" id="fTotal">R$ 0,00</b><span class="total-preview" id="formMsg">O card entra na aba Pagamento.</span></div>
+          <div class="form-btns">
+            <button class="btn-ghost" type="button" id="fCancel">Cancelar</button>
+            <button class="btn-primary" type="submit" id="fSubmit">Cadastrar photocard</button>
+          </div>
+        </div>
+        <datalist id="sellerList"></datalist>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Grupos: lista e criação/edição -->
+  <dialog class="sheet" id="groupDialog" aria-labelledby="gTitle">
+    <div class="sheet-box">
+      <div class="sheet-head">
+        <div class="sheet-title">
+          <button class="icon-btn sheet-back" type="button" id="gBack" aria-label="Voltar para a lista de grupos" hidden>←</button>
+          <h2 id="gTitle">Grupos</h2>
+        </div>
+        <button class="icon-btn sheet-close" type="button" id="gClose" aria-label="Fechar">✕</button>
+      </div>
+      <div class="glist" id="gListView">
+        <div class="glist-head">
+          <p>Junte cards da mesma compra: os fretes e a taxa contam uma vez só.</p>
+          <button class="btn-primary" type="button" id="gNew">+ Novo grupo</button>
+        </div>
+        <div id="gItems"></div>
+      </div>
+      <form class="add gform" id="gForm" autocomplete="off" hidden>
+        <label class="f">Nome do grupo
+          <input type="text" id="gName" placeholder="ex.: Compra de novembro" maxlength="80" required>
+        </label>
+        <div class="kind">
+          <div class="f"><span id="lgType">Tipo de compra</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lgType">
+              <label><input type="radio" name="gType" value="individual" checked><span>Individual</span></label>
+              <label><input type="radio" name="gType" value="ceg"><span title="Compra em grupo">CEG</span></label>
+            </div>
+          </div>
+          <div class="f"><span id="lgOrigin">Origem</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lgOrigin">
+              <label><input type="radio" name="gOrigin" value="nacional" checked><span>Nacional</span></label>
+              <label><input type="radio" name="gOrigin" value="internacional"><span>Internacional</span></label>
+            </div>
+          </div>
+          <p class="hint" id="gHint"></p>
+        </div>
+        <fieldset class="gfees">
+          <legend>Fretes e taxas do grupo</legend>
+          <p class="hint">Contam uma vez só, para todos os cards do grupo.</p>
+          <div class="fields" id="gFeeFields"></div>
+        </fieldset>
+        <fieldset class="gfees">
+          <legend>Photocards do grupo <span class="count" id="gCount">0</span></legend>
+          <input type="search" id="gSearch" placeholder="Buscar card pelo nome" aria-label="Buscar card pelo nome" hidden>
+          <div class="picker" id="gPicker"></div>
+          <div class="ownfees" id="gOwnFees" hidden></div>
+        </fieldset>
+        <div class="confirm" id="gDelConfirm" hidden></div>
+        <div class="form-foot">
+          <div class="form-total" aria-live="polite"><span>Total do grupo</span> <b class="num" id="gTotal">R$ 0,00</b></div>
+          <div class="form-btns">
+            <button class="btn-danger" type="button" id="gDelete" hidden>Excluir grupo</button>
+            <button class="btn-ghost" type="button" id="gCancel">Cancelar</button>
+            <button class="btn-primary" type="submit" id="gSubmit">Criar grupo</button>
           </div>
         </div>
       </form>
@@ -153,7 +209,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="config.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
