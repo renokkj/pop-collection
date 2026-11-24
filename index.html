@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Binder de Photocards</title>
+<title>Pop Collection</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="style.css">
@@ -16,7 +16,7 @@
   <div class="auth">
     <div class="cards-deco" aria-hidden="true"><span></span><span></span><span></span></div>
     <div>
-      <h1>Binder de Photocards</h1>
+      <h1>Pop Collection</h1>
       <p>Controle o pagamento, a chegada e a coleção dos seus photocards.</p>
     </div>
     <nav class="tabs" role="tablist">
@@ -55,7 +55,7 @@
 <div class="wrap" id="appView" hidden>
   <header>
     <div>
-      <h1>Binder de Photocards</h1>
+      <h1>Pop Collection</h1>
       <p>Cadastre, acompanhe o pagamento e a chegada de cada card.</p>
     </div>
     <div class="userbar"><span>Conta: <b id="uEmail"></b></span><button class="btn-ghost" type="button" id="logout">Sair</button></div>
@@ -91,7 +91,10 @@
       <div class="f" aria-live="polite"><span>Total</span><span class="num" id="fTotal" style="font-size:1.05rem;color:var(--fg);padding:8px 0">R$ 0,00</span></div>
       <div class="form-foot">
         <span class="total-preview" id="formMsg">O card entra na aba Pagamento.</span>
-        <button class="btn-primary" type="submit" id="fSubmit">Cadastrar photocard</button>
+        <div class="form-btns">
+          <button class="btn-ghost" type="button" id="fCancel" hidden>Cancelar</button>
+          <button class="btn-primary" type="submit" id="fSubmit">Cadastrar photocard</button>
+        </div>
       </div>
     </div>
   </form>

@@ -1,4 +1,4 @@
--- Binder de Photocards — estrutura do banco no Supabase
+-- Pop Collection — estrutura do banco no Supabase
 -- Cole este arquivo inteiro no SQL Editor do seu projeto Supabase e clique em "Run".
 -- Pode rodar de novo sem problema: ele não duplica nada.
 

@@ -24,6 +24,7 @@
   let tab = "pay";
   try { const t = localStorage.getItem("pc-tab"); if (["pay", "arr", "col"].includes(t)) tab = t; } catch (e) {}
   let loading = true, confirmClear = false, confirmDelete = null, clearing = false;
+  let editing = null, saving = false; // card em edição no formulário
   let photoBlob = null, photoPreviewUrl = null;
   const busy = new Set();
 
@@ -101,7 +102,7 @@
     if (event === "PASSWORD_RECOVERY") { user = session?.user || null; show("resetView"); return; }
     const next = session?.user || null;
     if (next && (!user || user.id !== next.id)) { user = next; enterApp(); }
-    else if (!next) { user = null; cards = []; photoUrls = new Map(); setMode("login"); show("authView"); }
+    else if (!next) { user = null; cards = []; photoUrls = new Map(); resetForm(); setMode("login"); show("authView"); }
   });
 
   function enterApp() {
@@ -159,13 +160,39 @@
       photoBlob = await shrink(file);
       if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
       photoPreviewUrl = URL.createObjectURL(photoBlob);
-      let img = $("drop").querySelector("img");
-      if (!img) { img = document.createElement("img"); img.alt = ""; $("drop").prepend(img); }
-      img.src = photoPreviewUrl;
-      $("dropText").hidden = true;
+      showPhoto(photoPreviewUrl);
     } catch (err) { photoBlob = null; toast("Não deu para ler essa imagem. Tente um JPG ou PNG."); }
   });
+  function showPhoto(src) {
+    let img = $("drop").querySelector("img");
+    if (!img) { img = document.createElement("img"); img.alt = ""; $("drop").prepend(img); }
+    img.src = src;
+    $("dropText").hidden = true;
+  }
+  function formLabels() {
+    $("fSubmit").textContent = editing ? "Salvar alterações" : "Cadastrar photocard";
+    $("formMsg").textContent = editing ? "Editando: " + editing.name : "O card entra na aba Pagamento.";
+    $("fCancel").hidden = !editing;
+    $("addForm").classList.toggle("editing", !!editing);
+  }
+  function startEdit(c) {
+    if (saving) return;
+    resetForm();
+    editing = c;
+    $("fName").value = c.name;
+    $("fSeller").value = c.seller || "";
+    $("fPrice").value = Number(c.price);
+    $("fShip").value = Number(c.shipping);
+    updateFormTotal();
+    const src = c.image_path && photoUrls.get(c.image_path);
+    if (src) showPhoto(src);
+    formLabels();
+    $("addForm").scrollIntoView({ block: "start" });
+    $("fName").focus({ preventScroll: true });
+  }
+  $("fCancel").addEventListener("click", () => resetForm());
   function resetForm() {
+    editing = null; formLabels();
     $("addForm").reset(); updateFormTotal(); photoBlob = null;
     const img = $("drop").querySelector("img"); if (img) img.remove();
     if (photoPreviewUrl) { URL.revokeObjectURL(photoPreviewUrl); photoPreviewUrl = null; }
@@ -176,17 +203,33 @@
     e.preventDefault();
     const name = $("fName").value.trim();
     if (!name) { $("fName").focus(); return; }
-    $("fSubmit").disabled = true; $("formMsg").textContent = "Salvando…";
+    const target = editing;
+    saving = true;
+    $("fSubmit").disabled = true; $("fCancel").disabled = true; $("formMsg").textContent = "Salvando…";
     let path = null;
     try {
       if (photoBlob) {
         path = `${user.id}/${crypto.randomUUID()}.jpg`;
         const { error } = await sb.storage.from(BUCKET).upload(path, photoBlob, { contentType: "image/jpeg" });
-        if (error) { path = null; toast("A foto não foi enviada, mas o card será salvo sem ela."); }
+        if (error) { path = null; toast(target ? "A nova foto não foi enviada." : "A foto não foi enviada, mas o card será salvo sem ela."); }
       }
-      const { data, error } = await sb.from("cards")
-        .insert({ name, seller: $("fSeller").value.trim() || null, price: cents($("fPrice").value), shipping: cents($("fShip").value), image_path: path })
-        .select().single();
+      const photoFailed = !!photoBlob && !path;
+      const values = { name, seller: $("fSeller").value.trim() || null, price: cents($("fPrice").value), shipping: cents($("fShip").value) };
+      if (target) {
+        // edição: mantém os pagamentos e a aba do card; a foto só muda se uma nova foi enviada
+        if (path) values.image_path = path;
+        const oldPath = target.image_path;
+        const { data, error } = await sb.from("cards").update(values).eq("id", target.id).select().single();
+        if (error) throw error;
+        if (path && oldPath) sb.storage.from(BUCKET).remove([oldPath]);
+        Object.assign(target, data);
+        if (path && photoPreviewUrl) photoUrls.set(path, photoPreviewUrl), (photoPreviewUrl = null);
+        resetForm();
+        toast(photoFailed ? "Dados salvos, mas a nova foto não foi enviada." : "Alterações salvas.");
+        render();
+        return;
+      }
+      const { data, error } = await sb.from("cards").insert({ ...values, image_path: path }).select().single();
       if (error) throw error;
       if (path && photoPreviewUrl) photoUrls.set(path, photoPreviewUrl), (photoPreviewUrl = null);
       cards.unshift(data);
@@ -198,7 +241,8 @@
       if (path) sb.storage.from(BUCKET).remove([path]);
       toast("Não foi possível salvar. Tente de novo.");
     } finally {
-      $("fSubmit").disabled = false; $("formMsg").textContent = "O card entra na aba Pagamento.";
+      saving = false;
+      $("fSubmit").disabled = false; $("fCancel").disabled = false; formLabels();
     }
   });
 
@@ -227,6 +271,7 @@
     if (error) { toast("Não foi possível apagar."); return; }
     if (c.image_path) sb.storage.from(BUCKET).remove([c.image_path]);
     cards = cards.filter((x) => x.id !== c.id);
+    if (editing && editing.id === c.id) resetForm();
     toast("Card apagado.");
     render();
   }
@@ -236,6 +281,7 @@
     clearing = false; confirmClear = false;
     if (error) { toast("Não foi possível apagar a coleção. Tente de novo."); render(); return; }
     if (paths && paths.length) sb.storage.from(BUCKET).remove(paths);
+    if (editing && editing.arrived) resetForm();
     toast("Coleção apagada. O valor continua no total gasto.");
     await loadAll();
   }
@@ -270,6 +316,7 @@
     input.addEventListener("change", () => fn(input.checked));
     return el("label", { class: "chk" + (on ? " on" : "") }, input, document.createTextNode(label));
   }
+  const editButton = (c) => el("button", { class: "icon-btn", type: "button", text: "Editar", "aria-label": "Editar " + c.name, onclick: () => startEdit(c) });
   function deleteControls(c) {
     if (confirmDelete === c.id) {
       return el("div", { class: "actions" },
@@ -277,6 +324,7 @@
         el("button", { class: "icon-btn", type: "button", text: "Cancelar", onclick: () => { confirmDelete = null; render(); } }));
     }
     return el("div", { class: "actions" },
+      editButton(c),
       el("button", { class: "icon-btn", type: "button", text: "Excluir", "aria-label": "Excluir " + c.name, onclick: () => { confirmDelete = c.id; render(); } }));
   }
   const infoBlock = (c) => el("div", { class: "info" },
@@ -314,7 +362,7 @@
     const status = el("div", { class: "status" },
       el("span", { class: "pill accent", text: when ? "Chegou em " + when : "Na coleção" }),
       el("button", { class: "icon-btn", type: "button", style: "width:fit-content;padding-left:0", text: "Ainda não chegou", onclick: () => patch(c, { arrived: false, arrived_at: null }) }));
-    return el("div", { class: "row" }, thumb(c), infoBlock(c), status, el("div", { class: "actions" }));
+    return el("div", { class: "row" }, thumb(c), infoBlock(c), status, el("div", { class: "actions" }, editButton(c)));
   }
 
   const HEAD = { pay: "Pagamento", arr: "Chegada", col: "Status" };
