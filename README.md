@@ -8,7 +8,7 @@ Cada pessoa cria a própria conta e só vê os próprios cards.
 
 ## Como funciona
 
-1. **Cadastro:** nome, preço e frete. O total (preço + frete) é calculado sozinho. A foto é opcional.
+1. **Cadastro:** nome, onde comprou (vendedor: GOM, Shopee etc.), preço e frete. O total (preço + frete) é calculado sozinho. O vendedor e a foto são opcionais.
 2. **Pagamento:** marque "Preço pago" e "Frete pago". Enquanto faltar algo, o app mostra quanto falta pagar.
 3. **Chegada:** com tudo pago, o card vai para esta aba. Clique em "Chegou ✓".
 4. **Coleção:** guarda os cards que já chegaram. O botão "Apagar coleção" libera espaço no banco, e o valor gasto continua somado no total.

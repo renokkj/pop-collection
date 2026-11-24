@@ -17,9 +17,6 @@ create table if not exists public.cards (
   image_path    text,
   created_at    timestamptz not null default now()
 );
--- Para quem já tinha rodado uma versão anterior deste arquivo:
-alter table public.cards add column if not exists seller text check (char_length(seller) <= 80);
-
 create index if not exists cards_user_idx on public.cards (user_id, created_at desc);
 
 -- 2) Total já gasto com coleções apagadas (para o "total gasto" não zerar)
