@@ -222,6 +222,8 @@ body:has(dialog.sheet[open]) { overflow: hidden; }
 .gitem .stack { width: 52px; }
 .gitem .from b { color: var(--fg); font-weight: 500; }
 input[type=search] { font: inherit; font-size: 0.95rem; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+.pick.locked { opacity: .55; cursor: not-allowed; }
+.pick.locked .tag { width: fit-content; margin-top: 2px; }
 .picker { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; overscroll-behavior: contain; }
 .pick { display: grid; grid-template-columns: auto 34px minmax(0, 1fr); gap: 10px; align-items: center; padding: 7px 10px; cursor: pointer; }
 .pick + .pick { border-top: 1px solid var(--line); }

@@ -638,28 +638,32 @@
   document.querySelectorAll("input[name=gType], input[name=gOrigin]").forEach((r) => r.addEventListener("change", updateGroupKind));
 
   const STAGE_NAME = { pay: "Pagamento", arr: "Chegada", col: "Coleção" };
+  // um card fica em um grupo só: no criar/editar grupo, os de outro grupo aparecem bloqueados
+  const otherGroup = (c) => (grp(c) && (!gEditing || c.group_id !== gEditing.id) ? grp(c) : null);
   function renderPicker() {
     const q = $("gSearch").value.trim().toLowerCase();
     const list = cards.filter((c) => !c.gift && (!q || c.name.toLowerCase().includes(q)))
-      .sort((a, b) => gMembers.has(b.id) - gMembers.has(a.id)); // os do grupo primeiro
+      // os do grupo primeiro, depois os sem grupo; os que já estão em outro grupo vão por último
+      .sort((a, b) => (gMembers.has(b.id) - gMembers.has(a.id)) || (!!otherGroup(a) - !!otherGroup(b)));
     const box = $("gPicker");
     if (!list.length) {
       box.replaceChildren(el("p", { class: "hint", text: cards.length ? "Nenhum card com esse nome." : "Você ainda não tem cards. Cadastre pelo botão \"+ Cadastrar Photocard\"." }));
       return;
     }
     box.replaceChildren(...list.map((c) => {
-      const input = el("input", { type: "checkbox" });
-      input.checked = gMembers.has(c.id);
+      const other = otherGroup(c);
+      const input = el("input", { type: "checkbox", disabled: other ? "" : null });
+      input.checked = !other && gMembers.has(c.id);
       input.addEventListener("change", () => {
         input.checked ? gMembers.add(c.id) : gMembers.delete(c.id);
         item.classList.toggle("on", input.checked);
         updateGroupTotal();
       });
-      const other = grp(c) && (!gEditing || c.group_id !== gEditing.id) ? grp(c) : null;
-      const item = el("label", { class: "pick" + (input.checked ? " on" : "") }, input, thumb(c),
+      const item = el("label", { class: "pick" + (input.checked ? " on" : "") + (other ? " locked" : ""), title: other ? `Este card já está no grupo "${other.name}". Para trocar, tire ele de lá primeiro.` : null }, input, thumb(c),
         el("span", { class: "pick-info" },
           el("span", { class: "title", text: c.name }),
-          el("span", { class: "from", text: [money(c.price), STAGE_NAME[stage(c)], other ? `sai do grupo "${other.name}"` : null].filter(Boolean).join(" · ") })));
+          el("span", { class: "from", text: [money(c.price), STAGE_NAME[stage(c)]].join(" · ") }),
+          other ? el("span", { class: "tag tag-group", text: `Já está no grupo "${other.name}"` }) : null));
       return item;
     }));
   }
@@ -709,7 +713,7 @@
         if (error) throw error;
         g = data; addGroupLocal(g);
       }
-      const add = cards.filter((c) => gMembers.has(c.id) && c.group_id !== g.id);
+      const add = cards.filter((c) => gMembers.has(c.id) && !c.group_id); // nunca tira um card de outro grupo
       const rem = cards.filter((c) => c.group_id === g.id && !gMembers.has(c.id));
       if (add.length) {
         const { error } = await sb.from("cards").update({ group_id: g.id }).in("id", add.map((c) => c.id));
