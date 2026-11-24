@@ -18,6 +18,7 @@ Controle os pagamentos, a chegada e a coleção dos seus photocards.
 
 - **Contas individuais:** cada pessoa só vê os próprios cards.
 - **Cadastro com foto:** nome, vendedor, preço e frete. A foto e o vendedor são opcionais.
+- **Categorias de compra:** Individual ou CEG, Nacional ou Internacional. O formulário mostra só os fretes e a taxa de importação (opcional) de cada categoria. Na CEG, você informa só a sua parte do que é dividido.
 - **Edição:** corrija nome, vendedor, valores ou foto depois do cadastro.
 - **Controle financeiro:** mostra o total gasto, o que já foi pago e o que falta pagar.
 - **Chegada:** separa os cards quitados que ainda estão a caminho.
@@ -28,12 +29,12 @@ Controle os pagamentos, a chegada e a coleção dos seus photocards.
 ```mermaid
 flowchart LR
     A[Cadastro] --> B[Pagamento]
-    B -->|preço e frete pagos| C[Chegada]
+    B -->|tudo pago| C[Chegada]
     C -->|Chegou ✓| D[Coleção]
 ```
 
-1. **Cadastro:** preencha os dados do card. O total (preço + frete) é calculado sozinho.
-2. **Pagamento:** marque "Preço pago" e "Frete pago". O app mostra quanto ainda falta.
+1. **Cadastro:** escolha a categoria e preencha os dados do card. O total (preço, fretes e taxas) é calculado sozinho.
+2. **Pagamento:** marque cada valor pago (preço, fretes e taxa). O app mostra quanto ainda falta.
 3. **Chegada:** com tudo pago, o card vem para cá. Quando receber, clique em "Chegou ✓".
 4. **Coleção:** guarda os cards recebidos. "Apagar coleção" remove esses cards e suas fotos, mas mantém o valor no total gasto.
 
