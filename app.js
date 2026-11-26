@@ -174,7 +174,7 @@
     if (event === "PASSWORD_RECOVERY") { user = session?.user || null; show("resetView"); return; }
     const next = session?.user || null;
     if (next && (!user || user.id !== next.id)) { user = next; enterApp(); }
-    else if (!next) { user = null; profile = null; cards = []; setGroups([]); photoUrls = new Map(); saving = false; closeForm(); resetForm(); closeGroups(); setMode("login"); show("authView"); }
+    else if (!next) { user = null; profile = null; visit = null; myFollowing = null; notifRows = []; unreadN = 0; cards = []; setGroups([]); photoUrls = new Map(); saving = false; closeForm(); resetForm(); closeGroups(); setMode("login"); show("authView"); }
   });
 
   // Antes do app: o perfil. Sem perfil, a pessoa cria o @username primeiro.
@@ -187,7 +187,7 @@
     if (error) missing = true;
     profile = data || null;
     if (!profile && !missing) { openSetup(); return; }
-    if (profile) loadFollowCounts();
+    if (profile) { loadFollowCounts(); loadNotifs(); }
     show("appView");
     loading = true; render();
     await loadAll();
@@ -1533,6 +1533,7 @@
   }
   function renderMe() {
     avatar($("meSideAv"), profile); avatar($("meTopAv"), profile);
+    $("meSide").classList.toggle("has-news", unreadN > 0); $("meTop").classList.toggle("has-news", unreadN > 0);
     $("meSideName").textContent = profile ? profile.display_name : "Meu perfil";
     $("meSideUser").textContent = profile ? "@" + profile.username : user ? user.email || "" : "";
     const on = sec === "perfil";
@@ -1564,7 +1565,7 @@
     btn.disabled = false;
     if (error) return authMsg(saveError(error), "err", "psMsg");
     profile = data;
-    loadFollowCounts();
+    loadFollowCounts(); loadNotifs();
     toast("Perfil criado!");
     show("appView");
     loading = true; render();
@@ -1587,12 +1588,14 @@
       el("h1", { id: "pName", text: p.display_name }),
       el("span", { class: "prof-user", text: "@" + p.username }),
       el("div", { class: "prof-stats" },
-        stat(followN.seguidores, followN.seguidores === 1 ? "seguidor" : "seguidores"),
+        statBtn(followN.seguidores, followN.seguidores === 1 ? "seguidor" : "seguidores", () => openFollowList(p, "seguidores")),
         el("span", { class: "dot", "aria-hidden": "true", text: "·" }),
-        stat(followN.seguindo, "seguindo")),
+        statBtn(followN.seguindo, "seguindo", () => openFollowList(p, "seguindo"))),
       p.favorite_groups && p.favorite_groups.length ? el("div", { class: "chips" }, ...p.favorite_groups.map((g) => el("span", { class: "chip", text: g }))) : null,
       el("div", { class: "prof-btns" },
         el("button", { class: "pill", type: "button", text: "Editar", onclick: openProfileEdit }),
+        el("button", { class: "pill pill-ghost pill-bell", type: "button", onclick: openNotifs, "aria-label": unreadN ? plural(unreadN, "aviso novo", "avisos novos") : "Avisos" },
+          "Avisos", unreadN ? el("b", { class: "bell-n", text: String(unreadN) }) : null),
         el("button", { class: "pill pill-ghost", type: "button", text: "Sair", onclick: logout })));
     $("pRows").replaceChildren(profRow("binder", p.binder_visibility), profRow("wishlist", p.wishlist_visibility));
   }
@@ -1633,12 +1636,128 @@
   }
 
 
+
+  // ---------- seguir ----------
+  const norm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  let myFollowing = null; // quem você segue (para "Quem você segue" na pesquisa)
+  async function loadMyFollowing() {
+    myFollowing = [];
+    const { data } = await sb.rpc("follow_list", { p_profile: user.id, p_kind: "seguindo" });
+    myFollowing = data || [];
+    await signMore(myFollowing.map((x) => x.avatar_path), 60 * 60);
+    if (sec === "busca") renderBusca();
+  }
+  const statBtn = (n, label, onclick) => el("button", { class: "pstat", type: "button", onclick },
+    el("b", { class: "num", text: String(n) }), " " + label);
+  // botão Seguir / Seguindo / Seguir de volta; p precisa de id, username, i_follow (e follows_me, se souber)
+  function followBtn(p, size, onChange) {
+    const b = el("button", { type: "button" });
+    const paint = () => {
+      b.className = "pill" + (p.i_follow ? " pill-ghost" : "") + (size === "lg" ? "" : " pill-sm");
+      b.textContent = p.i_follow ? "Seguindo" : p.follows_me ? "Seguir de volta" : "Seguir";
+      b.setAttribute("aria-pressed", String(!!p.i_follow));
+      b.setAttribute("aria-label", (p.i_follow ? "Deixar de seguir @" : "Seguir @") + p.username);
+    };
+    b.addEventListener("click", async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (b.disabled) return;
+      const was = !!p.i_follow;
+      b.disabled = true; p.i_follow = !was; paint();
+      const { error } = was
+        ? await sb.from("follows").delete().eq("follower_id", user.id).eq("following_id", p.id)
+        : await sb.from("follows").insert({ following_id: p.id });
+      b.disabled = false;
+      if (error && error.code !== "23505") { p.i_follow = was; paint(); toast("Não deu certo. Tente de novo."); return; }
+      followN.seguindo = Math.max(0, followN.seguindo + (was ? -1 : 1));
+      myFollowing = null;
+      [visit && visit.p, ...(sState.list || []), ...listRows, ...notifRows].forEach((x) => { if (x && x !== p && x.id === p.id) x.i_follow = p.i_follow; });
+      toast(was ? `Você deixou de seguir @${p.username}.` : `Seguindo @${p.username}.`);
+      if (onChange) onChange(!was);
+    });
+    paint();
+    return b;
+  }
+
+  // listas de seguidores e seguindo
+  const ldlg = $("listDialog");
+  let listRows = [];
+  async function openFollowList(p, kind) {
+    $("ldTitle").textContent = kind === "seguidores" ? "Seguidores" : "Seguindo";
+    $("ldSub").textContent = "@" + p.username;
+    $("ldBody").replaceChildren(el("div", { class: "people-msg", text: "Carregando…" }));
+    listRows = [];
+    if (!ldlg.open) ldlg.showModal();
+    const { data, error } = await sb.rpc("follow_list", { p_profile: p.id, p_kind: kind });
+    if (error) return $("ldBody").replaceChildren(el("div", { class: "people-msg", text: "Não consegui carregar a lista agora." }));
+    listRows = data || [];
+    await signMore(listRows.map((x) => x.avatar_path), 60 * 60);
+    $("ldBody").replaceChildren(listRows.length
+      ? el("div", { class: "people people-flat" }, ...listRows.map((x) => personRow(x)))
+      : el("div", { class: "people-msg", text: kind === "seguidores" ? "Ninguém segue ainda." : "Ainda não segue ninguém." }));
+  }
+  $("ldClose").addEventListener("click", () => ldlg.close());
+  ldlg.addEventListener("click", (e) => { if (e.target === ldlg) ldlg.close(); });
+  ldlg.addEventListener("close", () => { if (sec === "perfil" || sec === "visita") render(); });
+
+  // ---------- avisos ----------
+  const ndlg = $("notifDialog");
+  let notifRows = [], unreadN = 0;
+  async function loadNotifs() {
+    const me = user;
+    const { data, error } = await sb.from("notifications").select("id, actor_id, type, created_at, read_at").order("created_at", { ascending: false }).limit(50);
+    if (user !== me || error) return;
+    const list = data || [];
+    const ids = [...new Set(list.map((n) => n.actor_id))];
+    const [{ data: ps }, { data: fs }] = ids.length ? await Promise.all([
+      sb.from("profiles").select("id, username, display_name, avatar_path").in("id", ids),
+      sb.from("follows").select("following_id").eq("follower_id", me.id).in("following_id", ids),
+    ]) : [{ data: [] }, { data: [] }];
+    const byId = new Map((ps || []).map((x) => [x.id, x]));
+    const mine = new Set((fs || []).map((x) => x.following_id));
+    notifRows = list.filter((n) => byId.has(n.actor_id)).map((n) => ({ ...byId.get(n.actor_id), n, i_follow: mine.has(n.actor_id), follows_me: true }));
+    unreadN = notifRows.filter((x) => !x.n.read_at).length;
+    await signMore(notifRows.map((x) => x.avatar_path), 60 * 60);
+    renderMe(); if (sec === "perfil") render();
+  }
+  const ago = (iso) => {
+    const m = Math.round((Date.now() - new Date(iso)) / 60000);
+    if (m < 1) return "agora"; if (m < 60) return `há ${m} min`;
+    const h = Math.round(m / 60); if (h < 24) return `há ${h} h`;
+    const d = Math.round(h / 24); return d < 30 ? `há ${plural(d, "dia", "dias")}` : new Date(iso).toLocaleDateString("pt-BR");
+  };
+  async function openNotifs() {
+    const rows = notifRows;
+    $("ndBody").replaceChildren(rows.length
+      ? el("div", { class: "people people-flat" }, ...rows.map((x) => {
+          const r = personRow(x, `${ago(x.n.created_at)}`);
+          r.querySelector(".person-txt b").textContent = `@${x.username} começou a seguir você`;
+          r.classList.add("notif");
+          if (!x.n.read_at) r.classList.add("unread");
+          return r;
+        }))
+      : el("div", { class: "empty" }, el("strong", { text: "Nenhum aviso" }), el("span", { text: "Quando alguém seguir você, aparece aqui." })));
+    if (!ndlg.open) ndlg.showModal();
+    const unread = rows.filter((x) => !x.n.read_at);
+    if (unread.length) {
+      const now = new Date().toISOString();
+      unread.forEach((x) => (x.n.read_at = now));
+      unreadN = 0; renderMe();
+      await sb.from("notifications").update({ read_at: now }).eq("user_id", user.id).is("read_at", null);
+    }
+  }
+  $("ndClose").addEventListener("click", () => ndlg.close());
+  ndlg.addEventListener("click", (e) => { if (e.target === ndlg) ndlg.close(); });
+  ndlg.addEventListener("close", () => { if (sec === "perfil") render(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && user && profile) loadNotifs(); });
+
   // ---------- Colecionadores (pesquisa) ----------
   let sTimer = null, sSeq = 0, sState = { q: "", list: null, busy: false, error: false };
-  const personRow = (p) => {
+  const personRow = (p, extra) => {
     const av = el("span", { class: "avatar" }); avatar(av, p);
-    return el("a", { class: "person", href: "#@" + p.username },
-      av, el("span", { class: "person-txt" }, el("b", { text: p.display_name }), el("span", { text: "@" + p.username })));
+    return el("div", { class: "person" },
+      el("a", { class: "person-link", href: "#@" + p.username, onclick: () => { if (ldlg.open) ldlg.close(); if (ndlg.open) ndlg.close(); } },
+        av, el("span", { class: "person-txt" }, el("b", { text: p.display_name }), el("span", { text: extra || "@" + p.username }))),
+      p.is_me || (profile && p.id === profile.id) ? null : followBtn(p));
   };
   async function signMore(paths, secs) {
     const need = paths.filter((x) => x && !photoUrls.has(x));
@@ -1664,14 +1783,26 @@
   });
   function renderBusca() {
     const box = $("sResults");
+    box.classList.remove("people");
     const { q, list, busy, error } = sState;
-    if (!q || q.replace(/^@+/, "").length < 2) box.replaceChildren(el("div", { class: "empty" },
-      el("strong", { text: "Encontre outros colecionadores" }),
-      el("span", { text: "Digite pelo menos 2 letras do @username ou do nome. Você vê o Binder e a Wishlist de cada um, nunca valores ou compras." })));
+    if (!q || q.replace(/^@+/, "").length < 2) {
+      const hint = el("div", { class: "empty" },
+        el("strong", { text: "Encontre outros colecionadores" }),
+        el("span", { text: "Busque por @username, nome ou grupo favorito (ex.: aespa). Você vê o Binder e a Wishlist de cada um, nunca valores ou compras." }));
+      if (myFollowing && myFollowing.length) box.replaceChildren(el("h2", { class: "people-h", text: "Quem você segue" }), el("div", { class: "people" }, ...myFollowing.map((x) => personRow(x))), hint);
+      else box.replaceChildren(hint);
+      if (!myFollowing) loadMyFollowing();
+    }
     else if (busy) box.replaceChildren(el("div", { class: "people-msg", text: "Buscando…" }));
     else if (error) box.replaceChildren(el("div", { class: "people-msg", text: "Não consegui buscar agora. Confira a conexão e tente de novo." }));
     else if (!list.length) box.replaceChildren(el("div", { class: "people-msg", text: `Ninguém encontrado para "${q}".` }));
-    else box.replaceChildren(...list.map(personRow));
+    else {
+      const nq = norm(q.replace(/^@+/, ""));
+      box.replaceChildren(el("div", { class: "people" }, ...list.map((p) => {
+        const g = (p.favorite_groups || []).find((x) => norm(x).startsWith(nq));
+        return personRow(p, g && !norm(p.username).includes(nq) && !norm(p.display_name).includes(nq) ? `@${p.username} · curte ${g}` : null);
+      })));
+    }
   }
 
   // ---------- perfil de outra pessoa ----------
@@ -1730,8 +1861,11 @@
       el("h1", { id: "vName", text: p.display_name }),
       el("span", { class: "prof-user", text: "@" + p.username }),
       el("div", { class: "prof-stats" },
-        stat(p.followers, Number(p.followers) === 1 ? "seguidor" : "seguidores"), el("span", { class: "dot", "aria-hidden": "true", text: "·" }), stat(p.following, "seguindo")),
-      p.favorite_groups && p.favorite_groups.length ? el("div", { class: "chips" }, ...p.favorite_groups.map((g) => el("span", { class: "chip", text: g }))) : null);
+        statBtn(p.followers, Number(p.followers) === 1 ? "seguidor" : "seguidores", () => openFollowList(p, "seguidores")),
+        el("span", { class: "dot", "aria-hidden": "true", text: "·" }),
+        statBtn(p.following, "seguindo", () => openFollowList(p, "seguindo"))),
+      p.favorite_groups && p.favorite_groups.length ? el("div", { class: "chips" }, ...p.favorite_groups.map((g) => el("span", { class: "chip", text: g }))) : null,
+      el("div", { class: "prof-btns" }, followBtn(p, "lg", (on) => { p.followers = Number(p.followers) + (on ? 1 : -1); render(); })));
     const scope = v.scope;
     $("vRows").hidden = !!scope;
     $("vScopeView").hidden = !scope;

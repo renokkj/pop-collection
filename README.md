@@ -60,9 +60,17 @@ O app tem cinco seções: **Início**, **Compras**, **Binder**, **Wishlist** e *
 - **Início:** total investido, já pago e falta pagar; quantos cards aguardam pagamento, estão a caminho, estão no Binder e na Wishlist; pagamentos pendentes com "Marcar pago"; próximas chegadas com "Chegou ✓".
 - **Financeiro:** quanto foi em photocards, fretes e taxas; gasto dos últimos 12 meses em colunas; gasto por mês e por categoria. Só as compras entram nos valores.
 
+### Comunidade
+
+- **Perfil:** foto, nome, @username e até 5 grupos favoritos, com o Binder e a Wishlist em carrossel. Cada um pode ficar visível para todos ou só para você.
+- **Colecionadores:** busque pessoas por @username, nome ou grupo favorito (ex.: aespa) e veja o Binder e a Wishlist delas.
+- **Seguir:** siga outros colecionadores e veja as listas de seguidores e seguindo de cada perfil.
+- **Avisos:** quando alguém começa a seguir você, aparece um aviso no perfil, com o botão "Seguir de volta".
+- Valores, pagamentos e compras em andamento nunca aparecem para outras pessoas.
+
 ### Para todo o app
 
-- **Contas individuais:** cada pessoa só vê os próprios cards.
+- **Contas individuais:** seus cards, valores e compras só você edita e vê; os outros veem apenas o que você deixar visível no perfil.
 - **Botão + no celular:** em Compras, no Binder e na Wishlist ele abre o cadastro da seção; nas outras telas, mostra as opções. No computador, o mesmo fica no "+ Novo".
 - **Recuperar a senha** pelo link "Esqueci minha senha".
 - **Tema claro e escuro**, conforme o dispositivo.
@@ -127,12 +135,16 @@ O banco fica no Supabase (PostgreSQL). Tudo está em [`supabase/schema.sql`](sup
 | `card_groups` | Os pedidos, com os fretes e a taxa que valem para vários cards |
 | `folders` | As pastas do Binder e da Wishlist (`scope`) |
 | `stats` | O valor das coleções apagadas em versões antigas, que continua no total |
+| `profiles` | O perfil de cada pessoa: @username, nome, foto, grupos favoritos e quem pode ver o Binder e a Wishlist |
+| `follows` | Quem segue quem |
+| `notifications` | Os avisos de novos seguidores (os com mais de 90 dias são apagados) |
 
 Os totais do app somam só os cards com `kind = 'compra'`.
 
 ## Segurança
 
 - As regras de acesso (RLS) do [`schema.sql`](supabase/schema.sql) limitam cada pessoa aos próprios dados.
+- Quem visita um perfil não lê a tabela `cards`: funções do banco devolvem só foto, nome, grupo e pasta dos cards visíveis, nunca valores.
 - O bucket de fotos é privado, e as fotos são exibidas por links temporários.
 - A chave `anon` do [`config.js`](config.js) pode ser pública. **Nunca** coloque a `service_role` no repositório.
 

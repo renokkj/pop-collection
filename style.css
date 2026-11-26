@@ -621,3 +621,23 @@ dialog.sheet-sm { width: min(520px, calc(100% - 32px)); }
 .vscope-head { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .vscope-head a { text-decoration: none; }
 .vscope-head h2 { font-size: 1.35rem; }
+
+/* Seguir, listas e avisos */
+.pstat { background: none; border: none; padding: 2px 4px; color: var(--muted); font: inherit; font-size: 0.92rem; border-radius: 6px; cursor: pointer; }
+.pstat:hover b, .pstat:hover { color: var(--accent); }
+.pill-sm { padding: 5px 14px; font-size: 0.82rem; flex: none; }
+.pill[disabled] { opacity: .6; }
+.pill-bell { display: inline-flex; align-items: center; gap: 6px; }
+.bell-n { background: var(--danger); color: #fff; border-radius: 99px; font-size: 0.72rem; padding: 0 6px; line-height: 1.4; }
+.person { justify-content: space-between; }
+.person-link { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; color: inherit; text-decoration: none; }
+.person.unread { background: var(--accent-soft); }
+.notif .person-txt b { white-space: normal; font-weight: 500; line-height: 1.3; }
+.people-h { font-size: 1.05rem; margin: 4px 0 -6px; }
+.people-flat { border: none; border-radius: 0; background: transparent; }
+.ld-body { max-height: min(70vh, 560px); overflow-y: auto; padding: 4px 6px 12px; }
+#listDialog .sheet-title { flex-direction: column; align-items: flex-start; gap: 0; }
+#listDialog .sheet-title .muted { font-size: 0.85rem; }
+.has-news .avatar { position: relative; overflow: visible; }
+.side-me.has-news .avatar::after, .top-me.has-news .avatar::after { content: ""; position: absolute; top: -1px; right: -1px; width: 11px; height: 11px; border-radius: 99px; background: var(--danger); border: 2px solid var(--surface); }
+.has-news .avatar img { border-radius: 99px; }

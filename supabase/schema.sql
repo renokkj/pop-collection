@@ -168,6 +168,38 @@ create table if not exists public.follows (
 );
 create index if not exists follows_following_idx on public.follows (following_id, created_at desc);
 
+-- 1g) Avisos (2026-11): por enquanto, só "começou a seguir você".
+--     O banco cria o aviso sozinho quando alguém segue; ninguém consegue criar aviso para outra pessoa.
+--     Seguir, deixar de seguir e seguir de novo não repete o aviso: o antigo volta para o topo.
+--     Avisos com mais de 90 dias são apagados.
+create table if not exists public.notifications (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references public.profiles (id) on delete cascade,
+  actor_id   uuid not null references public.profiles (id) on delete cascade,
+  type       text not null check (type in ('novo_seguidor')),
+  created_at timestamptz not null default now(),
+  read_at    timestamptz,
+  unique (user_id, actor_id, type)
+);
+create index if not exists notifications_user_idx on public.notifications (user_id, created_at desc);
+
+create or replace function public.notify_new_follower()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  insert into notifications (user_id, actor_id, type)
+  values (new.following_id, new.follower_id, 'novo_seguidor')
+  on conflict (user_id, actor_id, type) do update set created_at = now(), read_at = null;
+  delete from notifications where user_id = new.following_id and created_at < now() - interval '90 days';
+  return new;
+end;
+$$;
+revoke all on function public.notify_new_follower() from public, anon, authenticated;
+drop trigger if exists follows_notify on public.follows;
+create trigger follows_notify after insert on public.follows
+  for each row execute function public.notify_new_follower();
+
 -- 2) Total já gasto com coleções apagadas (para o "total gasto" não zerar)
 create table if not exists public.stats (
   user_id        uuid primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -182,6 +214,7 @@ alter table public.card_groups enable row level security;
 alter table public.folders enable row level security;
 alter table public.profiles enable row level security;
 alter table public.follows enable row level security;
+alter table public.notifications enable row level security;
 
 drop policy if exists "cards do dono" on public.cards;
 create policy "cards do dono" on public.cards
@@ -234,6 +267,27 @@ create policy "seguir: deixar de seguir" on public.follows
   for delete to authenticated
   using (follower_id = auth.uid());
 
+-- avisos: só quem recebe vê, marca como lido ou apaga
+drop policy if exists "avisos: ver os meus" on public.notifications;
+create policy "avisos: ver os meus" on public.notifications
+  for select to authenticated
+  using (user_id = auth.uid());
+
+drop policy if exists "avisos: marcar os meus" on public.notifications;
+create policy "avisos: marcar os meus" on public.notifications
+  for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists "avisos: apagar os meus" on public.notifications;
+create policy "avisos: apagar os meus" on public.notifications
+  for delete to authenticated
+  using (user_id = auth.uid());
+
+revoke insert on public.notifications from anon, authenticated;
+revoke update on public.notifications from anon, authenticated;
+grant update (read_at) on public.notifications to authenticated;
+
 drop policy if exists "stats do dono" on public.stats;
 create policy "stats do dono" on public.stats
   for all to authenticated
@@ -247,7 +301,7 @@ create policy "stats do dono" on public.stats
 
 -- o card aparece no Binder (mesma regra da tela do Binder)
 create or replace function public.card_in_binder(c public.cards)
-returns boolean language sql immutable as $$
+returns boolean language sql immutable set search_path = public as $$
   select c.kind = 'binder' or (c.kind = 'compra' and c.arrived and c.in_binder)
 $$;
 
@@ -264,12 +318,13 @@ as $$
             or (p_scope = 'wishlist' and p.wishlist_visibility = 'todos')))
 $$;
 
--- cabeçalho de um perfil: nome, @username, foto, grupos, contadores e se você já segue
-create or replace function public.get_profile(p_username text)
+-- cabeçalho de um perfil: nome, @username, foto, grupos, contadores e se vocês se seguem
+drop function if exists public.get_profile(text);
+create function public.get_profile(p_username text)
 returns table (
   id uuid, username text, display_name text, avatar_path text, favorite_groups text[],
   binder_visible boolean, wishlist_visible boolean, binder_count bigint, wishlist_count bigint,
-  followers bigint, following bigint, i_follow boolean, is_me boolean)
+  followers bigint, following bigint, i_follow boolean, follows_me boolean, is_me boolean)
 language sql stable security definer set search_path = public
 as $$
   select p.id, p.username, p.display_name, p.avatar_path, p.favorite_groups,
@@ -281,6 +336,7 @@ as $$
          (select count(*) from follows f where f.following_id = p.id),
          (select count(*) from follows f where f.follower_id = p.id),
          exists (select 1 from follows f where f.follower_id = auth.uid() and f.following_id = p.id),
+         exists (select 1 from follows f where f.follower_id = p.id and f.following_id = auth.uid()),
          p.id = auth.uid()
     from profiles p
    where auth.uid() is not null and p.username = lower(btrim(p_username, ' @'))
@@ -309,20 +365,39 @@ as $$
    order by coalesce(case when p_scope = 'wishlist' then c.wished_at else c.arrived_at end, c.created_at) desc, c.name
 $$;
 
--- pesquisa de colecionadores por @username ou nome, sem diferença de acento ou maiúscula
-create or replace function public.search_profiles(p_query text)
-returns table (id uuid, username text, display_name text, avatar_path text)
+-- pesquisa de colecionadores por @username, nome ou grupo favorito, sem diferença de acento ou maiúscula
+drop function if exists public.search_profiles(text);
+create function public.search_profiles(p_query text)
+returns table (id uuid, username text, display_name text, avatar_path text, favorite_groups text[], i_follow boolean)
 language sql stable security definer set search_path = public
 as $$
   with q as (
     select translate(lower(btrim(p_query, ' @')), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') as t)
-  select p.id, p.username, p.display_name, p.avatar_path
+  select p.id, p.username, p.display_name, p.avatar_path, p.favorite_groups,
+         exists (select 1 from follows f where f.follower_id = auth.uid() and f.following_id = p.id)
     from profiles p, q
    where auth.uid() is not null and char_length(q.t) >= 2
      and (p.username like '%' || q.t || '%'
-          or translate(lower(p.display_name), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') like '%' || q.t || '%')
+          or translate(lower(p.display_name), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') like '%' || q.t || '%'
+          or exists (select 1 from unnest(p.favorite_groups) g
+                      where translate(lower(g), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') like q.t || '%'))
    order by (p.username = q.t) desc, (p.username like q.t || '%') desc, p.username
-   limit 20
+   limit 30
+$$;
+
+-- listas de seguidores e seguindo de um perfil (com "você segue?" em cada linha)
+create or replace function public.follow_list(p_profile uuid, p_kind text)
+returns table (id uuid, username text, display_name text, avatar_path text, i_follow boolean, is_me boolean)
+language sql stable security invoker set search_path = public
+as $$
+  select p.id, p.username, p.display_name, p.avatar_path,
+         exists (select 1 from follows m where m.follower_id = auth.uid() and m.following_id = p.id),
+         p.id = auth.uid()
+    from follows f
+    join profiles p on p.id = case when p_kind = 'seguidores' then f.follower_id else f.following_id end
+   where case when p_kind = 'seguidores' then f.following_id else f.follower_id end = p_profile
+   order by f.created_at desc
+   limit 500
 $$;
 
 -- a foto pode ser vista por quem pergunta? (foto de perfil, card visível ou capa de pasta visível)
@@ -338,17 +413,18 @@ as $$
     or exists (select 1 from folders f where f.cover_path = p_path and scope_visible(f.user_id, f.scope)))
 $$;
 
-revoke all on function public.scope_visible(uuid, text) from public, anon;
+revoke all on function public.scope_visible(uuid, text) from public, anon, authenticated;
 revoke all on function public.get_profile(text) from public, anon;
 revoke all on function public.profile_folders(uuid, text) from public, anon;
 revoke all on function public.profile_cards(uuid, text) from public, anon;
 revoke all on function public.search_profiles(text) from public, anon;
 revoke all on function public.photo_visible(text) from public, anon;
-grant execute on function public.scope_visible(uuid, text) to authenticated;
 grant execute on function public.get_profile(text) to authenticated;
 grant execute on function public.profile_folders(uuid, text) to authenticated;
 grant execute on function public.profile_cards(uuid, text) to authenticated;
 grant execute on function public.search_profiles(text) to authenticated;
+revoke all on function public.follow_list(uuid, text) from public, anon;
+grant execute on function public.follow_list(uuid, text) to authenticated;
 grant execute on function public.photo_visible(text) to authenticated;
 
 -- 4) Apagar coleção (antigo; o app não usa mais desde o Binder): soma o valor no histórico e apaga os cards que chegaram.
