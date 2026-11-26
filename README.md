@@ -16,8 +16,8 @@ Controle as compras, os pagamentos e a chegada dos seus photocards, monte o Bind
 
 <br>
 
-<img src="docs/app-computador.png" alt="Tela inicial do Pop Collection no computador" width="68%">&nbsp;
-<img src="docs/app-celular.png" alt="Tela inicial do Pop Collection no celular" width="24%">
+<img src="docs/inicio-computador.png" alt="Tela inicial do Pop Collection no computador" width="68%">&nbsp;
+<img src="docs/inicio-celular.png" alt="Tela inicial do Pop Collection no celular" width="24%">
 
 <sub>Telas com dados de exemplo.</sub>
 
