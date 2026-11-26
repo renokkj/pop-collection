@@ -1517,7 +1517,7 @@
   function avatar(node, p) {
     const src = p && p.avatar_path && photoUrls.get(p.avatar_path);
     node.replaceChildren(src ? el("img", { src, alt: "" }) : el("span", { text: ((p && p.display_name) || "?").trim().charAt(0).toUpperCase() }));
-    node.classList.toggle("empty", !src);
+    node.classList.toggle("no-pic", !src);
   }
   // seguidores e seguindo: contados na hora no banco
   async function loadFollowCounts() {
@@ -1627,7 +1627,7 @@
   let peGroups = [], pePhoto = undefined, pePreview = null, peSaving = false; // pePhoto: undefined = sem mudança, null = tirar, Blob = nova
   function peAvatar() {
     const node = $("peAv");
-    if (pePhoto instanceof Blob) { node.replaceChildren(el("img", { src: pePreview, alt: "" })); node.classList.remove("empty"); }
+    if (pePhoto instanceof Blob) { node.replaceChildren(el("img", { src: pePreview, alt: "" })); node.classList.remove("no-pic"); }
     else avatar(node, pePhoto === null ? { display_name: $("peName").value || profile.display_name } : { ...profile, display_name: $("peName").value || profile.display_name });
     $("peNoPhoto").hidden = pePhoto === null || (pePhoto === undefined && !profile.avatar_path);
   }
