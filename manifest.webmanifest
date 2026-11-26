@@ -1,7 +1,7 @@
 {
   "name": "Pop Collection",
   "short_name": "Pop Collection",
-  "description": "Controle o pagamento, a chegada e a coleção dos seus photocards.",
+  "description": "Controle as compras, os pagamentos, a chegada, a coleção e a wishlist dos seus photocards.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
