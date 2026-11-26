@@ -29,7 +29,7 @@
   let tab = "pay";
   try { const t = localStorage.getItem("pc-tab"); if (["pay", "arr", "col"].includes(t)) tab = t; } catch (e) {}
   // seção aberta (fica no endereço: #inicio, #compras, #financeiro)
-  const SECS = ["inicio", "compras", "binder", "wishlist", "financeiro", "perfil"];
+  const SECS = ["inicio", "compras", "binder", "wishlist", "financeiro", "perfil", "busca"];
   let sec = SECS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "inicio";
   // filtros de Compras
   const filt = { q: "", artist: "", kind: "" };
@@ -191,6 +191,7 @@
     show("appView");
     loading = true; render();
     await loadAll();
+    if (location.hash.startsWith("#@")) { visit = null; applyHash(); render(); }
     if (missing) notice("Falta atualizar o banco para usar o perfil: rode o arquivo supabase/schema.sql no Supabase e recarregue a página.");
   }
 
@@ -1274,10 +1275,10 @@
 
   // ---------- detalhes de um photocard ----------
   const cdlg = $("cardDialog");
-  let cdId = null, cdConfirm = false, cdAcquire = false;
+  let cdId = null, cdConfirm = false, cdAcquire = false, cdVisit = false;
   function openCard(c) { cdId = c.id; cdConfirm = false; cdAcquire = false; refreshCard(); if (!cdlg.open) cdlg.showModal(); }
   function closeCard() { if (cdlg.open) cdlg.close(); }
-  cdlg.addEventListener("close", () => { cdId = null; });
+  cdlg.addEventListener("close", () => { cdId = null; cdVisit = false; });
   cdlg.addEventListener("click", (e) => { if (e.target === cdlg) closeCard(); });
   $("cdClose").addEventListener("click", closeCard);
   async function moveCards(list, folderId, msg) {
@@ -1595,30 +1596,177 @@
         el("button", { class: "pill pill-ghost", type: "button", text: "Sair", onclick: logout })));
     $("pRows").replaceChildren(profRow("binder", p.binder_visibility), profRow("wishlist", p.wishlist_visibility));
   }
-  function profRow(scope, vis) {
-    const wish = scope === "wishlist", all = scopeCards(scope), NAME = SCOPE_NAME[scope];
+  // opts (perfil de outra pessoa): { list, href, onCard, hidden, owner, loading }
+  function profRow(scope, vis, opts) {
+    const o = opts || {};
+    const wish = scope === "wishlist", all = o.list || scopeCards(scope), NAME = SCOPE_NAME[scope];
+    const href = o.href || "#" + scope, onCard = o.onCard || openCard;
     const head = el("div", { class: "prow-head" },
-      el("a", { class: "prow-title", href: "#" + scope },
+      el("a", { class: "prow-title", href },
         el("h2", { text: NAME }), el("span", { class: "count", text: String(all.length) }),
         el("span", { class: "chev", "aria-hidden": "true" })),
-      el("span", { class: "prow-vis" + (vis === "so_eu" ? " lock" : ""), text: vis === "so_eu" ? "Só você vê" : "Visível para todos" }));
+      o.owner ? null : el("span", { class: "prow-vis" + (vis === "so_eu" ? " lock" : ""), text: vis === "so_eu" ? "Só você vê" : "Visível para todos" }));
+    if (o.hidden) {
+      head.querySelector(".count").remove(); head.querySelector(".chev").remove();
+      const t = head.querySelector(".prow-title"); t.removeAttribute("href");
+      return el("section", { class: "prow-sec", "aria-label": NAME }, head,
+        el("div", { class: "prow-empty prow-lock" }, el("span", { text: `@${o.owner} deixou ${wish ? "a Wishlist" : "o Binder"} visível só para si.` })));
+    }
     head.querySelector(".chev").innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>';
     let body;
-    if (loading) body = el("div", { class: "prow-empty" }, "Carregando…");
+    if (o.owner ? o.loading : loading) body = el("div", { class: "prow-empty" }, "Carregando…");
+    else if (!all.length && o.owner) body = el("div", { class: "prow-empty" }, el("span", { text: wish ? "A Wishlist está vazia." : "O Binder está vazio." }));
     else if (!all.length) body = el("div", { class: "prow-empty" },
       el("span", { text: wish ? "Sua Wishlist está vazia." : "Seu Binder está vazio." }),
       linkBtn(wish ? "Adicionar à Wishlist" : "Adicionar ao Binder", scope));
     else body = el("div", { class: "prow", role: "list" },
       ...all.slice(0, ROW_MAX).map((c) => {
         const src = c.image_path && photoUrls.get(c.image_path);
-        return el("button", { class: "prow-item", type: "button", role: "listitem", onclick: () => openCard(c) },
+        return el("button", { class: "prow-item", type: "button", role: "listitem", onclick: () => onCard(c) },
           el("span", { class: "pc" }, src ? el("img", { src, alt: "", loading: "lazy" }) : el("span", { class: "pc-ph", text: (c.name || "?").charAt(0).toUpperCase() })),
           el("span", { class: "prow-name", text: c.name }),
           el("span", { class: "prow-sub", text: c.artist || " " }));
       }),
-      all.length > ROW_MAX ? el("a", { class: "prow-item prow-more", href: "#" + scope, role: "listitem" },
+      all.length > ROW_MAX ? el("a", { class: "prow-item prow-more", href, role: "listitem" },
         el("span", { class: "pc" }, el("span", { text: "Ver tudo" })), el("span", { class: "prow-name", text: plural(all.length, "card", "cards") })) : null);
     return el("section", { class: "prow-sec", "aria-label": NAME }, head, body);
+  }
+
+
+  // ---------- Colecionadores (pesquisa) ----------
+  let sTimer = null, sSeq = 0, sState = { q: "", list: null, busy: false, error: false };
+  const personRow = (p) => {
+    const av = el("span", { class: "avatar" }); avatar(av, p);
+    return el("a", { class: "person", href: "#@" + p.username },
+      av, el("span", { class: "person-txt" }, el("b", { text: p.display_name }), el("span", { text: "@" + p.username })));
+  };
+  async function signMore(paths, secs) {
+    const need = paths.filter((x) => x && !photoUrls.has(x));
+    if (!need.length) return;
+    const { data } = await sb.storage.from(BUCKET).createSignedUrls(need, secs);
+    (data || []).forEach((d) => { if (d.signedUrl) photoUrls.set(d.path, d.signedUrl); });
+  }
+  $("sQuery").addEventListener("input", () => {
+    clearTimeout(sTimer);
+    const q = $("sQuery").value.trim();
+    sState = { q, list: null, busy: q.replace(/^@+/, "").length >= 2, error: false };
+    renderBusca();
+    if (!sState.busy) return;
+    const my = ++sSeq;
+    sTimer = setTimeout(async () => {
+      const { data, error } = await sb.rpc("search_profiles", { p_query: q });
+      if (my !== sSeq) return;
+      if (!error) await signMore((data || []).map((p) => p.avatar_path), 60 * 60);
+      if (my !== sSeq) return;
+      sState = { q, list: error ? [] : (data || []).filter((p) => !profile || p.id !== profile.id), busy: false, error: !!error };
+      renderBusca();
+    }, 250);
+  });
+  function renderBusca() {
+    const box = $("sResults");
+    const { q, list, busy, error } = sState;
+    if (!q || q.replace(/^@+/, "").length < 2) box.replaceChildren(el("div", { class: "empty" },
+      el("strong", { text: "Encontre outros colecionadores" }),
+      el("span", { text: "Digite pelo menos 2 letras do @username ou do nome. Você vê o Binder e a Wishlist de cada um, nunca valores ou compras." })));
+    else if (busy) box.replaceChildren(el("div", { class: "people-msg", text: "Buscando…" }));
+    else if (error) box.replaceChildren(el("div", { class: "people-msg", text: "Não consegui buscar agora. Confira a conexão e tente de novo." }));
+    else if (!list.length) box.replaceChildren(el("div", { class: "people-msg", text: `Ninguém encontrado para "${q}".` }));
+    else box.replaceChildren(...list.map(personRow));
+  }
+
+  // ---------- perfil de outra pessoa ----------
+  // Tudo vem das funções do banco que só devolvem foto, nome, grupo e pasta.
+  let visit = null; // { username, scope, loading, missing, p, cards: {binder, wishlist}, folders: {...}, folder }
+  async function openVisit(username, scope) {
+    if (visit && visit.username === username) { visit.scope = scope; visit.folder = "all"; return; }
+    const v = visit = { username, scope, loading: true, missing: false, p: null, cards: { binder: [], wishlist: [] }, folders: { binder: [], wishlist: [] }, folder: "all" };
+    const { data, error } = await sb.rpc("get_profile", { p_username: username });
+    if (visit !== v) return;
+    const p = !error && data && data[0];
+    if (!p) { v.loading = false; v.missing = true; return render(); }
+    if (p.is_me) { visit = null; location.replace("#" + (scope || "perfil")); return; }
+    v.p = p;
+    const jobs = [];
+    ["binder", "wishlist"].forEach((sc) => {
+      if (!p[sc + "_visible"]) return;
+      jobs.push(sb.rpc("profile_cards", { p_profile: p.id, p_scope: sc }).then(({ data }) => { v.cards[sc] = data || []; }));
+      jobs.push(sb.rpc("profile_folders", { p_profile: p.id, p_scope: sc }).then(({ data }) => { v.folders[sc] = data || []; }));
+    });
+    await Promise.all(jobs);
+    if (visit !== v) return;
+    await signMore([p.avatar_path, ...v.cards.binder.map((c) => c.image_path), ...v.cards.wishlist.map((c) => c.image_path),
+      ...v.folders.binder.map((f) => f.cover_path), ...v.folders.wishlist.map((f) => f.cover_path)], 60 * 60);
+    if (visit !== v) return;
+    v.loading = false;
+    render();
+  }
+  // card de outra pessoa: só a foto ampliada, o nome e o grupo
+  function openVisitCard(c) {
+    cdVisit = true; cdId = null;
+    const src = c.image_path && photoUrls.get(c.image_path);
+    $("cdTitle").textContent = c.name;
+    $("cdBody").replaceChildren(
+      el("div", { class: "cd-pic" }, src ? el("img", { src, alt: c.name }) : el("span", { text: (c.name || "?").charAt(0).toUpperCase() })),
+      el("div", { class: "cd-info" },
+        el("dl", { class: "cd-list" }, el("dt", { text: "Photocard" }), el("dd", { text: c.name }), el("dt", { text: "Grupo de K-pop" }), el("dd", { text: c.artist || "Sem grupo" }))));
+    if (!cdlg.open) cdlg.showModal();
+  }
+  function renderVisit() {
+    const v = visit;
+    if (!v || v.loading && !v.p) {
+      $("vProf").replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Carregando perfil…" })));
+      $("vRows").replaceChildren(); $("vScopeView").hidden = true; return;
+    }
+    if (v.missing) {
+      $("vProf").replaceChildren(el("div", { class: "empty" }, el("strong", { text: `@${v.username} não foi encontrado` }),
+        el("span", { text: "Confira o nome de usuário ou procure em Colecionadores." }),
+        el("div", { class: "form-btns" }, linkBtn("Procurar colecionadores", "busca"))));
+      $("vRows").replaceChildren(); $("vScopeView").hidden = true; return;
+    }
+    const p = v.p;
+    const av = el("span", { class: "avatar xl" }); avatar(av, p);
+    const stat = (n, label) => el("span", { class: "pstat" }, el("b", { class: "num", text: String(n) }), " " + label);
+    $("vProf").replaceChildren(av,
+      el("h1", { id: "vName", text: p.display_name }),
+      el("span", { class: "prof-user", text: "@" + p.username }),
+      el("div", { class: "prof-stats" },
+        stat(p.followers, Number(p.followers) === 1 ? "seguidor" : "seguidores"), el("span", { class: "dot", "aria-hidden": "true", text: "·" }), stat(p.following, "seguindo")),
+      p.favorite_groups && p.favorite_groups.length ? el("div", { class: "chips" }, ...p.favorite_groups.map((g) => el("span", { class: "chip", text: g }))) : null);
+    const scope = v.scope;
+    $("vRows").hidden = !!scope;
+    $("vScopeView").hidden = !scope;
+    if (!scope) {
+      $("vRows").replaceChildren(...["binder", "wishlist"].map((sc) => profRow(sc, null, {
+        owner: p.username, list: v.cards[sc], hidden: !p[sc + "_visible"], loading: v.loading,
+        href: `#@${p.username}/${sc}`, onCard: openVisitCard })));
+      return;
+    }
+    // coleção inteira, com as pastas
+    const all = v.cards[scope], fs = v.folders[scope].map((f) => [f, all.filter((c) => c.folder_id === f.id)]).filter(([, l]) => l.length);
+    if (v.folder !== "all" && !fs.some(([f]) => f.id === v.folder)) v.folder = "all";
+    $("vScopeHead").replaceChildren(
+      el("a", { class: "btn-ghost btn-sm", href: "#@" + p.username, text: "← Voltar ao perfil" }),
+      el("h2", { text: `${SCOPE_NAME[scope]} de @${p.username}` }));
+    const firstPic = (l) => { const c = l.find((x) => x.image_path && photoUrls.get(x.image_path)); return c ? photoUrls.get(c.image_path) : null; };
+    const tile = (key, name, l, cover) => {
+      const on = v.folder === key;
+      return el("button", { class: "folder" + (on ? " on" : ""), type: "button", role: "listitem", "aria-pressed": String(on), onclick: () => { v.folder = key; render(); } },
+        el("span", { class: "folder-cover" + (cover ? "" : " empty") }, cover ? el("img", { src: cover, alt: "", loading: "lazy" }) : null),
+        el("span", { class: "folder-name", text: name }), el("span", { class: "folder-n", text: plural(l.length, "card", "cards") }));
+    };
+    $("vFolders").hidden = !fs.length;
+    $("vFolders").replaceChildren(tile("all", "Todos", all, firstPic(all)),
+      ...fs.map(([f, l]) => tile(f.id, f.name, l, (f.cover_path && photoUrls.get(f.cover_path)) || firstPic(l))));
+    const list = v.folder === "all" ? all : all.filter((c) => c.folder_id === v.folder);
+    const grid = $("vGrid");
+    if (!p[scope + "_visible"]) grid.replaceChildren(el("div", { class: "empty" }, el("strong", { text: `@${p.username} deixou ${scope === "wishlist" ? "a Wishlist" : "o Binder"} visível só para si.` })));
+    else if (v.loading) grid.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Carregando…" })));
+    else if (!list.length) grid.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Nenhum card aqui ainda" })));
+    else grid.replaceChildren(...list.map((c) => {
+      const src = c.image_path && photoUrls.get(c.image_path);
+      return el("button", { class: "pc", type: "button", "aria-label": c.name, title: c.name, onclick: () => openVisitCard(c) },
+        src ? el("img", { src, alt: "", loading: "lazy" }) : el("span", { class: "pc-ph", text: (c.name || "?").charAt(0).toUpperCase() }));
+    }));
   }
 
   // Editar perfil
@@ -1924,10 +2072,22 @@
     if (location.hash.slice(1) !== s) location.hash = s; // o hashchange desenha
     else { sec = s; render(); }
   }
+  // #@username abre o perfil de outra pessoa; #@username/binder e #@username/wishlist, a coleção inteira
+  function applyHash() {
+    const h = decodeURIComponent(location.hash.slice(1));
+    if (h.startsWith("@")) {
+      const [u, sc] = h.slice(1).split("/");
+      openVisit(cleanUser(u), sc === "binder" || sc === "wishlist" ? sc : "");
+      sec = "visita";
+      return true;
+    }
+    if (!SECS.includes(h)) return false;
+    sec = h;
+    return true;
+  }
   window.addEventListener("hashchange", () => {
-    const s = location.hash.slice(1);
-    if (!SECS.includes(s)) return;
-    sec = s; setFab(false); render();
+    if (!applyHash()) return;
+    setFab(false); render();
     window.scrollTo(0, 0);
   });
   function renderNav(sm) {
@@ -1939,6 +2099,9 @@
     $("secFinanceiro").hidden = sec !== "financeiro";
     $("secBinder").hidden = sec !== "binder" && sec !== "wishlist";
     $("secPerfil").hidden = sec !== "perfil";
+    $("secBusca").hidden = sec !== "busca";
+    $("secVisita").hidden = sec !== "visita";
+    $("searchTop").toggleAttribute("aria-current", sec === "busca");
     renderMe();
     const pend = sm.byStage.pay.length + sm.byStage.arr.length;
     $("nPend").hidden = !pend;
@@ -2230,12 +2393,15 @@
     else if (sec === "compras") renderCompras(sm);
     else if (sec === "binder" || sec === "wishlist") renderBinder();
     else if (sec === "perfil") renderPerfil();
+    else if (sec === "busca") renderBusca();
+    else if (sec === "visita") renderVisit();
     else renderFin(sm);
-    if (cdlg.open) refreshCard();
+    if (cdlg.open && !cdVisit) refreshCard();
     setFab(!$("fabMenu").hidden);
   }
 
   setMode("login");
   resetForm();
+
   sb.auth.getSession().then(({ data }) => { if (!data.session) show("authView"); });
 })();

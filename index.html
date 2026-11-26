@@ -23,7 +23,7 @@
 <meta name="apple-mobile-web-app-title" content="Pop Collection">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -138,6 +138,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>
         <span>Financeiro</span>
       </a>
+      <a href="#busca" data-sec="busca" class="nav-desk">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+        <span>Colecionadores</span>
+      </a>
     </div>
     <a class="side-me" href="#perfil" id="meSide" aria-label="Meu perfil">
       <span class="avatar sm" id="meSideAv"></span>
@@ -148,7 +152,10 @@
   <main class="main">
     <header class="topbar">
       <div class="brand brand-m"><img src="icons/logo.svg" alt="" width="26" height="26"><span>Pop Collection</span></div>
-      <a class="top-me" href="#perfil" id="meTop" aria-label="Meu perfil"><span class="avatar sm" id="meTopAv"></span></a>
+      <div class="top-btns">
+        <a class="top-search" href="#busca" id="searchTop" aria-label="Pesquisar colecionadores"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg></a>
+        <a class="top-me" href="#perfil" id="meTop" aria-label="Meu perfil"><span class="avatar sm" id="meTopAv"></span></a>
+      </div>
     </header>
 
     <div id="notice" class="notice" hidden></div>
@@ -211,6 +218,27 @@
     <section class="sec" id="secPerfil" aria-labelledby="pName" hidden>
       <div class="prof" id="prof"></div>
       <div class="prows" id="pRows"></div>
+    </section>
+
+    <!-- Colecionadores: pesquisa por @username ou nome -->
+    <section class="sec" id="secBusca" aria-labelledby="hBusca" hidden>
+      <h1 id="hBusca">Colecionadores</h1>
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+        <input type="search" id="sQuery" placeholder="Buscar por @username ou nome" aria-label="Buscar colecionadores" autocomplete="off" autocapitalize="none" spellcheck="false">
+      </div>
+      <div class="people" id="sResults" aria-live="polite"></div>
+    </section>
+
+    <!-- Perfil de outra pessoa -->
+    <section class="sec" id="secVisita" aria-labelledby="vName" hidden>
+      <div class="prof" id="vProf"></div>
+      <div class="prows" id="vRows"></div>
+      <div class="vscope" id="vScopeView" hidden>
+        <div class="vscope-head" id="vScopeHead"></div>
+        <div class="folders" id="vFolders" role="list" aria-label="Pastas"></div>
+        <div class="pgrid" id="vGrid"></div>
+      </div>
     </section>
 
     <!-- Financeiro -->
@@ -489,7 +517,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=22"></script>
-<script src="app.js?v=22"></script>
+<script src="config.js?v=23"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>

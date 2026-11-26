@@ -73,7 +73,7 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.15rem; margin
   /* celular e tablet: as seções vão para uma barra fixa embaixo */
   .app { display: block; }
   .sidenav { position: fixed; inset: auto 0 0 0; height: auto; flex-direction: row; gap: 0; padding: 6px max(8px, env(safe-area-inset-left, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)); border-right: none; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(10px); }
-  .sidenav .brand, .side-add, .side-me { display: none; }
+  .sidenav .brand, .side-add, .side-me, .navlinks .nav-desk { display: none; }
   .navlinks { flex-direction: row; flex: 1; justify-content: space-around; gap: 2px; }
   .navlinks a { flex: 1; max-width: 120px; flex-direction: column; justify-content: center; gap: 2px; min-height: 52px; padding: 6px 4px; font-size: 0.72rem; border-radius: 12px; }
   .navlinks a[aria-current=page] { background: transparent; }
@@ -595,3 +595,29 @@ dialog.sheet-sm { width: min(520px, calc(100% - 32px)); }
 .at-input { background: var(--bg); border-radius: 8px; }
 .at-input input:focus-visible { outline: none; }
 #profileSetupView form { display: flex; flex-direction: column; gap: 14px; }
+
+/* Colecionadores e perfil de outra pessoa */
+.top-btns { display: flex; align-items: center; gap: 10px; }
+.top-search { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 99px; color: var(--fg); }
+.top-search svg, .search-box svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.top-search[aria-current] { background: var(--accent-soft); color: var(--accent); }
+.search-box { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 4px 14px; color: var(--muted); }
+.search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search-box input[type=search] { border: none; background: transparent; padding: 10px 0; font-size: 1rem; }
+.search-box input:focus-visible { outline: none; }
+.people { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.people:has(> .empty) { background: transparent; border: none; }
+.person { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--fg); text-decoration: none; border-top: 1px solid var(--line); }
+.person:first-child { border-top: none; }
+.person:hover { background: var(--sunken); }
+.person .avatar { width: 48px; }
+.person-txt { display: flex; flex-direction: column; min-width: 0; }
+.person-txt b { font-weight: 600; }
+.person-txt span { color: var(--muted); font-size: 0.88rem; }
+.person-txt > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.people-msg { padding: 16px; color: var(--muted); font-size: 0.92rem; }
+.prow-lock { color: var(--muted); }
+.vscope { display: flex; flex-direction: column; gap: 16px; }
+.vscope-head { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.vscope-head a { text-decoration: none; }
+.vscope-head h2 { font-size: 1.35rem; }

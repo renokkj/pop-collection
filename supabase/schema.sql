@@ -240,6 +240,117 @@ create policy "stats do dono" on public.stats
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
 
+-- 3b) Perfis de outras pessoas (2026-11). Quem visita um perfil NUNCA lê a tabela cards:
+--     passa só por estas funções, que conferem a visibilidade e devolvem uma lista fixa de colunas
+--     (foto, nome, grupo e pasta). Valores, vendedor, pedidos, categoria, presente e datas ficam de fora.
+--     Binder público = cards do Binder + compras que já chegaram e estão no Binder.
+
+-- o card aparece no Binder (mesma regra da tela do Binder)
+create or replace function public.card_in_binder(c public.cards)
+returns boolean language sql immutable as $$
+  select c.kind = 'binder' or (c.kind = 'compra' and c.arrived and c.in_binder)
+$$;
+
+-- aquele escopo (binder ou wishlist) do perfil está visível para quem pergunta
+create or replace function public.scope_visible(p_owner uuid, p_scope text)
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select auth.uid() is not null and exists (
+    select 1 from profiles p
+     where p.id = p_owner
+       and (p.id = auth.uid()
+            or (p_scope = 'binder' and p.binder_visibility = 'todos')
+            or (p_scope = 'wishlist' and p.wishlist_visibility = 'todos')))
+$$;
+
+-- cabeçalho de um perfil: nome, @username, foto, grupos, contadores e se você já segue
+create or replace function public.get_profile(p_username text)
+returns table (
+  id uuid, username text, display_name text, avatar_path text, favorite_groups text[],
+  binder_visible boolean, wishlist_visible boolean, binder_count bigint, wishlist_count bigint,
+  followers bigint, following bigint, i_follow boolean, is_me boolean)
+language sql stable security definer set search_path = public
+as $$
+  select p.id, p.username, p.display_name, p.avatar_path, p.favorite_groups,
+         scope_visible(p.id, 'binder'), scope_visible(p.id, 'wishlist'),
+         case when scope_visible(p.id, 'binder') then
+           (select count(*) from cards c where c.user_id = p.id and card_in_binder(c)) end,
+         case when scope_visible(p.id, 'wishlist') then
+           (select count(*) from cards c where c.user_id = p.id and c.kind = 'wishlist') end,
+         (select count(*) from follows f where f.following_id = p.id),
+         (select count(*) from follows f where f.follower_id = p.id),
+         exists (select 1 from follows f where f.follower_id = auth.uid() and f.following_id = p.id),
+         p.id = auth.uid()
+    from profiles p
+   where auth.uid() is not null and p.username = lower(btrim(p_username, ' @'))
+$$;
+
+-- pastas do Binder ou da Wishlist de um perfil (vazio se estiver em "Somente eu")
+create or replace function public.profile_folders(p_profile uuid, p_scope text)
+returns table (id uuid, name text, cover_path text, "position" integer)
+language sql stable security definer set search_path = public
+as $$
+  select f.id, f.name, f.cover_path, f.position
+    from folders f
+   where f.user_id = p_profile and f.scope = p_scope and scope_visible(p_profile, p_scope)
+   order by f.position, f.created_at
+$$;
+
+-- cards do Binder ou da Wishlist de um perfil: só foto, nome, grupo e pasta
+create or replace function public.profile_cards(p_profile uuid, p_scope text)
+returns table (id uuid, name text, artist text, image_path text, folder_id uuid)
+language sql stable security definer set search_path = public
+as $$
+  select c.id, c.name, c.artist, c.image_path, c.folder_id
+    from cards c
+   where c.user_id = p_profile and scope_visible(p_profile, p_scope)
+     and case when p_scope = 'binder' then card_in_binder(c) when p_scope = 'wishlist' then c.kind = 'wishlist' else false end
+   order by coalesce(case when p_scope = 'wishlist' then c.wished_at else c.arrived_at end, c.created_at) desc, c.name
+$$;
+
+-- pesquisa de colecionadores por @username ou nome, sem diferença de acento ou maiúscula
+create or replace function public.search_profiles(p_query text)
+returns table (id uuid, username text, display_name text, avatar_path text)
+language sql stable security definer set search_path = public
+as $$
+  with q as (
+    select translate(lower(btrim(p_query, ' @')), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') as t)
+  select p.id, p.username, p.display_name, p.avatar_path
+    from profiles p, q
+   where auth.uid() is not null and char_length(q.t) >= 2
+     and (p.username like '%' || q.t || '%'
+          or translate(lower(p.display_name), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') like '%' || q.t || '%')
+   order by (p.username = q.t) desc, (p.username like q.t || '%') desc, p.username
+   limit 20
+$$;
+
+-- a foto pode ser vista por quem pergunta? (foto de perfil, card visível ou capa de pasta visível)
+create or replace function public.photo_visible(p_path text)
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select auth.uid() is not null and (
+    exists (select 1 from profiles p where p.avatar_path = p_path)
+    or exists (select 1 from cards c where c.image_path = p_path
+                and ((card_in_binder(c) and scope_visible(c.user_id, 'binder'))
+                     or (c.kind = 'wishlist' and scope_visible(c.user_id, 'wishlist'))))
+    or exists (select 1 from folders f where f.cover_path = p_path and scope_visible(f.user_id, f.scope)))
+$$;
+
+revoke all on function public.scope_visible(uuid, text) from public, anon;
+revoke all on function public.get_profile(text) from public, anon;
+revoke all on function public.profile_folders(uuid, text) from public, anon;
+revoke all on function public.profile_cards(uuid, text) from public, anon;
+revoke all on function public.search_profiles(text) from public, anon;
+revoke all on function public.photo_visible(text) from public, anon;
+grant execute on function public.scope_visible(uuid, text) to authenticated;
+grant execute on function public.get_profile(text) to authenticated;
+grant execute on function public.profile_folders(uuid, text) to authenticated;
+grant execute on function public.profile_cards(uuid, text) to authenticated;
+grant execute on function public.search_profiles(text) to authenticated;
+grant execute on function public.photo_visible(text) to authenticated;
+
 -- 4) Apagar coleção (antigo; o app não usa mais desde o Binder): soma o valor no histórico e apaga os cards que chegaram.
 --    Num card com grupo conta só o preço; os fretes e a taxa do grupo entram no histórico
 --    quando todos os cards do grupo saem junto (aí o grupo, vazio, também é apagado).
@@ -300,6 +411,12 @@ drop policy if exists "fotos: ler as minhas" on storage.objects;
 create policy "fotos: ler as minhas" on storage.objects
   for select to authenticated
   using (bucket_id = 'photocards' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- outras pessoas só conseguem abrir uma foto se ela estiver visível num perfil
+drop policy if exists "fotos: ver as dos perfis" on storage.objects;
+create policy "fotos: ver as dos perfis" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'photocards' and public.photo_visible(name));
 
 drop policy if exists "fotos: enviar na minha pasta" on storage.objects;
 create policy "fotos: enviar na minha pasta" on storage.objects
