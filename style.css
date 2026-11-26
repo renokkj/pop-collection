@@ -90,7 +90,7 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.15rem; margin
 /* Início */
 .home { display: flex; flex-direction: column; gap: 16px; }
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; color: var(--fg); font-weight: 500; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; color: var(--fg); font-weight: 500; min-width: 0; }
 .tile:hover { border-color: var(--accent); }
 .tile .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
 .tile .value { font-size: 1.7rem; line-height: 1.2; }
@@ -99,8 +99,8 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.15rem; margin
 .tile.warn .value, .tile.warn .label { color: var(--warn); }
 .tile.info-t { background: var(--ok-soft); border-color: transparent; }
 .tile.info-t .value, .tile.info-t .label { color: var(--ok); }
-@media (max-width: 1100px) { .tiles { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 600px) { .tile .value { font-size: 1.45rem; } .tile .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; } }
+@media (max-width: 1100px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .tile .value { font-size: 1.45rem; } .tile .sub { max-width: 100%; overflow-wrap: anywhere; } }
 .home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 @media (max-width: 760px) { .home-grid { grid-template-columns: 1fr; } }
 .box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
