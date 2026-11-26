@@ -515,3 +515,13 @@ dialog.sheet-sm { width: min(520px, calc(100% - 32px)); }
 .acq-opt:hover, .acq-opt:focus-visible { border-color: var(--accent); }
 .acq-opt b { font-size: 0.92rem; }
 .acq-opt span { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+
+/* página do pedido */
+.gactions { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.gactions button { flex: 1 1 auto; }
+.gcard { display: flex; flex-direction: column; }
+.gcard .gout { align-self: flex-end; margin: -6px 14px 10px 0; font-size: 0.82rem; color: var(--muted); }
+.gcard .gout:hover { color: var(--danger, var(--accent)); }
+.gitem-open { width: 100%; text-align: left; background: none; border: none; color: inherit; cursor: pointer; border-radius: 12px; }
+.gitem-open:hover { background: var(--sunken); }
+.gitem-open .chev { font-size: 1.6rem; color: var(--muted); margin-left: auto; padding-right: 6px; }

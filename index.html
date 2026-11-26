@@ -23,7 +23,7 @@
 <meta name="apple-mobile-web-app-title" content="Pop Collection">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -142,7 +142,6 @@
       <div class="filters" id="filters">
         <input type="search" id="qName" placeholder="Buscar pelo nome" aria-label="Buscar compra pelo nome">
         <select id="qArtist" aria-label="Filtrar por grupo de K-pop"></select>
-        <select id="qSeller" aria-label="Filtrar por vendedor"></select>
         <select id="qKind" aria-label="Filtrar por categoria"></select>
         <button class="icon-btn" type="button" id="qClear" hidden>Limpar filtros</button>
       </div>
@@ -233,11 +232,6 @@
           <label class="f">Data da compra
             <input type="date" id="fDate">
           </label>
-          <label class="f">Previsão de chegada (opcional)
-            <input type="date" id="fExpected">
-          </label>
-        </div>
-        <div class="daterow">
           <div class="f" id="fFolderWrap"></div>
         </div>
         <div class="entries" id="entries"></div>
@@ -364,7 +358,7 @@
           <p class="hint">Contam uma vez só, para todos os cards do pedido.</p>
           <div class="fields" id="gFeeFields"></div>
         </fieldset>
-        <fieldset class="gfees">
+        <fieldset class="gfees" id="gPickWrap">
           <legend>Photocards do pedido <span class="count" id="gCount">0</span></legend>
           <input type="search" id="gSearch" placeholder="Buscar card pelo nome" aria-label="Buscar card pelo nome" hidden>
           <div class="picker" id="gPicker"></div>
@@ -396,7 +390,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=18"></script>
-<script src="app.js?v=18"></script>
+<script src="config.js?v=19"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>

@@ -33,13 +33,13 @@ O app tem cinco seções: **Início**, **Compras**, **Binder**, **Wishlist** e *
 
 ### Compras
 
-- **Registrar compra:** foto, nome, grupo de K-pop, vendedor, categoria, preço, fretes, data da compra e previsão de chegada. O total é calculado sozinho. Dá para registrar vários cards de uma vez com "+ Adicionar outro photocard".
+- **Registrar compra:** foto, nome, grupo de K-pop, vendedor, categoria, preço, fretes e data da compra. O total é calculado sozinho. Dá para registrar vários cards de uma vez com "+ Adicionar outro photocard".
 - **Colar a foto:** no computador, copie uma imagem e aperte Ctrl+V (Cmd+V no Mac) no cadastro.
 - **Categorias:** Individual ou CEG, Nacional ou Internacional. O formulário mostra só os fretes e a taxa de importação de cada categoria. Na CEG, você informa só a sua parte do que é dividido.
 - **Presente:** um card que você ganhou não tem custo e vai direto para a Chegada.
-- **Pedidos:** junte cards da mesma compra num pedido. Os fretes e a taxa ficam no pedido e contam uma vez só.
+- **Pedidos:** os cards comprados juntos ficam num pedido, e os fretes e a taxa contam uma vez só. Registrar dois ou mais cards de uma vez cria o pedido sozinho. Na página do pedido dá para registrar um card comprado depois, trazer um card já cadastrado, tirar um card do pedido e editar o nome, a categoria e os fretes.
 - **Três abas:** Pagamento (marque cada valor pago), Chegada (com tudo pago, aguarde e toque em "Chegou ✓") e Concluídas.
-- **Busca e filtros** por nome, grupo de K-pop, vendedor e categoria.
+- **Busca e filtros** por nome, grupo de K-pop e categoria.
 
 ### Binder
 
@@ -57,8 +57,8 @@ O app tem cinco seções: **Início**, **Compras**, **Binder**, **Wishlist** e *
 
 ### Início e Financeiro
 
-- **Início:** total investido, já pago e falta pagar; quantos cards aguardam pagamento, estão a caminho, estão no Binder e na Wishlist; pagamentos pendentes com "Marcar pago"; próximas chegadas com "Chegou ✓"; compras recentes e os últimos cards no Binder.
-- **Financeiro:** quanto foi em photocards, fretes e taxas; gasto dos últimos 12 meses em colunas; gasto por mês, categoria, grupo de K-pop e vendedor; quantos cards há no Binder e na Wishlist por grupo. Só as compras entram nos valores.
+- **Início:** total investido, já pago e falta pagar; quantos cards aguardam pagamento, estão a caminho, estão no Binder e na Wishlist; pagamentos pendentes com "Marcar pago"; próximas chegadas com "Chegou ✓".
+- **Financeiro:** quanto foi em photocards, fretes e taxas; gasto dos últimos 12 meses em colunas; gasto por mês e por categoria. Só as compras entram nos valores.
 
 ### Para todo o app
 

@@ -30,7 +30,7 @@
   const SECS = ["inicio", "compras", "binder", "wishlist", "financeiro"];
   let sec = SECS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "inicio";
   // filtros de Compras
-  const filt = { q: "", artist: "", seller: "", kind: "" };
+  const filt = { q: "", artist: "", kind: "" };
   let colView = "cards"; // Coleção: "cards" (um por um) ou "groups" (por pedido)
   try { if (localStorage.getItem("pc-colview") === "groups") colView = "groups"; } catch (e) {}
   let loading = true, confirmDelete = null;
@@ -459,7 +459,6 @@
     e.artist.value = c.artist || "";
     const acq = c.kind === "wishlist";
     $("fDate").value = acq ? today() : c.purchased_on || "";
-    $("fExpected").value = c.expected_on || "";
     e.price.value = acq ? "" : Number(c.price);
     e.fees.fill(c);
     setRadio("fType", c.purchase_type || "individual");
@@ -520,7 +519,7 @@
       // num pedido, os fretes próprios do card não são tocados (ficam guardados)
       const values = (e) => {
         const base = { name: e.name.value.trim(), seller: e.seller.value.trim() || null, artist: artistName(e.artist.value),
-          purchased_on: $("fDate").value || today(), expected_on: $("fExpected").value || null, folder_id };
+          purchased_on: $("fDate").value || today(), folder_id };
         // presente: zera os valores e marca tudo como pago
         if (gift) return { ...base, gift: true, group_id: g ? g.id : null, purchase_type: g ? g.purchase_type : t, origin: g ? g.origin : o, price: 0, shipping: 0, shipping_to_gom: 0, import_tax: 0,
           paid_price: true, paid_shipping: true, paid_shipping_to_gom: true, paid_tax: true };
@@ -586,11 +585,12 @@
   const gFees = feeInputs(updateGroupTotal);
   $("gFeeFields").append(...gFees.nodes);
   let gEditing = null, gFromList = false, gMembers = new Set(), gSaving = false, gOwnAdded = false;
+  let gReturnTo = null; // pedido para onde o ← e o Cancelar voltam (editar e adicionar abertos de dentro do pedido)
 
   function openGroups() { showGroupList(); if (!gdlg.open) gdlg.showModal(); }
   function closeGroups() { if (!gSaving && gdlg.open) gdlg.close(); }
   function showGroupList() {
-    gEditing = null; gDetailId = null;
+    gEditing = null; gDetailId = null; gReturnTo = null;
     $("gListView").hidden = false; $("gForm").hidden = true; $("gDetailView").hidden = true; $("gBack").hidden = true;
     $("gTitle").textContent = "Pedidos";
     renderGroupList();
@@ -599,19 +599,20 @@
     const box = $("gItems");
     if (!groups.length) {
       box.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Nenhum pedido ainda" }),
-        el("span", { text: "Crie um pedido para juntar cards da mesma compra, mesmo que já estejam cadastrados." })));
+        el("span", { text: "Um pedido junta os cards comprados juntos: os fretes e a taxa contam uma vez só. Registre dois ou mais cards de uma vez e o pedido é criado sozinho." })));
       return;
     }
     box.replaceChildren(...groups.map((g) => {
       const m = members(g);
-      return el("div", { class: "gitem" }, stack(m),
+      const d = groupDue(g);
+      // tocar no pedido abre a página dele: cards, pagamentos e todas as ações
+      return el("button", { class: "gitem gitem-open", type: "button", "aria-label": "Abrir o pedido " + g.name, onclick: () => openGroupDetail(g, true) }, stack(m),
         el("div", { class: "info" },
           el("span", { class: "title", text: g.name }),
           el("span", { class: "tag", text: kindLabel(g) }),
-          el("span", { class: "from" }, document.createTextNode(plural(m.length, "card", "cards") + " · "), el("b", { class: "num", text: money(groupTotal(g)) }))),
-        el("div", { class: "gitem-btns" },
-          el("button", { class: "btn-ghost", type: "button", text: "Ver", "aria-label": "Ver os cards do pedido " + g.name, onclick: () => openGroupDetail(g, true) }),
-          el("button", { class: "btn-ghost", type: "button", text: "Editar", "aria-label": "Editar o pedido " + g.name, onclick: () => openGroupForm(g, true) })));
+          el("span", { class: "from" }, document.createTextNode(plural(m.length, "card", "cards") + " · "), el("b", { class: "num", text: money(groupTotal(g)) }),
+            document.createTextNode(d > 0 ? " · falta " + money(d) : " · pago"))),
+        el("span", { class: "chev", "aria-hidden": "true", text: "›" }));
     }));
   }
   // janela do pedido: abre ao clicar no pedido nas abas ou em "Ver" no botão Pedidos.
@@ -634,6 +635,11 @@
     const head = el("div", { class: "gdetail-head" }, stack(m),
       el("div", { class: "info" }, el("span", { class: "tag tag-group", text: "Pedido · " + kindLabel(g) }), groupMoney(g, m)),
       status);
+    const loose = buys().filter((c) => !c.group_id).length;
+    const acts = el("div", { class: "gactions" },
+      el("button", { class: "btn-primary", type: "button", text: "+ Registrar card neste pedido", onclick: () => { closeGroups(); openNewBuyIn(g); } }),
+      loose ? el("button", { class: "btn-ghost", type: "button", text: "Adicionar card já cadastrado", onclick: () => showAddExisting(g) }) : null,
+      el("button", { class: "btn-ghost", type: "button", text: "Editar pedido", onclick: () => { gReturnTo = g; openGroupForm(g, true); } }));
     const sections = [["pay", "Em Pagamento", rowPay], ["arr", "Em Chegada", rowArr], ["col", "Chegaram", rowCol]].map(([st, name, fn]) => {
       const list = m.filter((c) => stage(c) === st);
       if (!list.length) return null;
@@ -641,10 +647,12 @@
         onclick: () => patchMany(list, { arrived: true, arrived_at: new Date().toISOString() }, `${list.length} cards chegaram! Já estão no Binder.`) }) : null;
       return el("section", { class: "gsection" },
         el("div", { class: "gsection-head" }, el("h3", {}, document.createTextNode(name + " "), el("span", { class: "count", text: list.length })), all),
-        el("div", { class: "table" }, ...list.map((c) => fn(c, true))));
+        el("div", { class: "table" }, ...list.map((c) => el("div", { class: "gcard" }, fn(c, true),
+          el("button", { class: "linkbtn gout", type: "button", text: "Tirar do pedido", "aria-label": "Tirar do pedido: " + c.name,
+            onclick: () => patch(c, { group_id: null }, `${c.name} saiu do pedido ${g.name}.`) })))));
     }).filter(Boolean);
-    $("gDetailView").replaceChildren(head,
-      ...(sections.length ? sections : [el("div", { class: "empty" }, el("span", { text: "Nenhum card neste pedido ainda. Adicione em Editar, no botão Pedidos." }))]));
+    $("gDetailView").replaceChildren(head, acts,
+      ...(sections.length ? sections : [el("div", { class: "empty" }, el("span", { text: "Nenhum card neste pedido ainda. Registre um card novo ou adicione um que já está cadastrado." }))]));
     $("gTitle").textContent = g.name;
     $("gListView").hidden = true; $("gForm").hidden = true; $("gDetailView").hidden = false;
   }
@@ -662,6 +670,7 @@
     $("gDelete").hidden = !g;
     $("gDelConfirm").hidden = true;
     $("gListView").hidden = true; $("gDetailView").hidden = true; $("gForm").hidden = false; $("gBack").hidden = !fromList;
+    $("gPickWrap").hidden = !!g; // num pedido que já existe, os cards são mexidos na página do pedido
     $("gSearch").hidden = buys().length < 8;
     updateGroupKind();
     renderPicker();
@@ -767,7 +776,7 @@
       }
       setGroupBusy(false);
       toast(wasNew ? `Pedido "${g.name}" criado com ${plural(gMembers.size, "card", "cards")}.` : "Pedido salvo.");
-      gFromList ? showGroupList() : closeGroups();
+      if (gReturnTo || wasNew) { gReturnTo = null; showGroupDetail(g, true); } else gFromList ? showGroupList() : closeGroups();
       render();
     } catch (err) {
       setGroupBusy(false);
@@ -797,6 +806,57 @@
   }
   $("openGroups").addEventListener("click", openGroups);
 
+  // registrar um card novo direto num pedido (o pedido já vem escolhido)
+  function openNewBuyIn(g) {
+    openNewBuy();
+    $("fGroup").value = g.id; groupTouched = true;
+    updateKindFields(); formLabels();
+  }
+  // trazer para o pedido cards que já estão cadastrados e ainda não têm pedido
+  function showAddExisting(g) {
+    gReturnTo = g; gDetailId = null;
+    const pick = new Set();
+    const q = el("input", { type: "search", placeholder: "Buscar card pelo nome", "aria-label": "Buscar card pelo nome" });
+    const listBox = el("div", { class: "picker" });
+    const btn = el("button", { class: "btn-primary", type: "button", text: "Adicionar ao pedido", disabled: "" });
+    const note = el("p", { class: "hint" });
+    const draw = () => {
+      const term = q.value.trim().toLowerCase();
+      const list = buys().filter((c) => !c.group_id && (!term || c.name.toLowerCase().includes(term)))
+        .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+      listBox.replaceChildren(...(list.length ? list.map((c) => {
+        const input = el("input", { type: "checkbox" });
+        input.checked = pick.has(c.id);
+        input.addEventListener("change", () => { input.checked ? pick.add(c.id) : pick.delete(c.id); item.classList.toggle("on", input.checked); sync(); });
+        const item = el("label", { class: "pick" + (input.checked ? " on" : "") }, input, thumb(c),
+          el("span", { class: "pick-info" }, el("span", { class: "title", text: c.name }),
+            el("span", { class: "from", text: [c.seller, c.gift ? "Presente" : money(c.price), STAGE_NAME[stage(c)]].filter(Boolean).join(" · ") })));
+        return item;
+      }) : [el("p", { class: "hint", text: "Nenhum card sem pedido com esse nome." })]));
+    };
+    const sync = () => {
+      btn.disabled = !pick.size;
+      btn.textContent = pick.size > 1 ? `Adicionar ${pick.size} cards ao pedido` : "Adicionar ao pedido";
+      const own = cards.filter((c) => pick.has(c.id) && fees(c) > 0);
+      note.textContent = own.length ? `Os fretes próprios ${own.length === 1 ? "desse card deixam" : "desses cards deixam"} de contar: no pedido valem os fretes do pedido. Se o card sair do pedido, eles voltam.` : "";
+    };
+    q.addEventListener("input", draw);
+    btn.addEventListener("click", async () => {
+      const list = cards.filter((c) => pick.has(c.id) && !c.group_id);
+      await patchMany(list, { group_id: g.id }, `${plural(list.length, "card adicionado", "cards adicionados")} ao pedido ${g.name}.`);
+      gReturnTo = null; showGroupDetail(g, true);
+    });
+    draw(); sync();
+    $("gTitle").textContent = "Adicionar ao pedido";
+    $("gBack").hidden = false;
+    $("gDetailView").replaceChildren(...[
+      el("p", { class: "hint", text: `Escolha os cards que fazem parte de "${g.name}". Só aparecem os que ainda não estão em nenhum pedido.` }),
+      buys().filter((c) => !c.group_id).length > 8 ? q : null, listBox, note,
+      el("div", { class: "form-btns" }, el("button", { class: "btn-ghost", type: "button", text: "Cancelar", onclick: () => $("gBack").click() }), btn)].filter(Boolean));
+    $("gListView").hidden = true; $("gForm").hidden = true; $("gDetailView").hidden = false;
+    $("gDetailView").scrollTop = 0;
+  }
+
   // ---------- botão flutuante do celular ----------
   // Em Compras, no Binder e na Wishlist o + abre direto o cadastro daquela seção; nas outras, as opções.
   function setFab(open) {
@@ -824,8 +884,8 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if (!$("fabMenu").hidden) setFab(false); setSideMenu(false); } });
   $("fabGroups").addEventListener("click", () => { setFab(false); openGroups(); });
   $("gNew").addEventListener("click", () => openGroupForm(null, true));
-  $("gBack").addEventListener("click", () => { if (!gSaving) showGroupList(); });
-  $("gCancel").addEventListener("click", () => { if (gSaving) return; gFromList ? showGroupList() : closeGroups(); });
+  $("gBack").addEventListener("click", () => { if (gSaving) return; if (gReturnTo && groupsById.has(gReturnTo.id)) { const g = gReturnTo; gReturnTo = null; showGroupDetail(g, true); } else showGroupList(); });
+  $("gCancel").addEventListener("click", () => { if (gSaving) return; if (gReturnTo) return $("gBack").click(); gFromList ? showGroupList() : closeGroups(); });
   $("gClose").addEventListener("click", closeGroups);
   gdlg.addEventListener("close", () => { gDetailId = null; });
   gdlg.addEventListener("cancel", (e) => { if (gSaving) e.preventDefault(); });
@@ -1541,7 +1601,7 @@
         el("div", { class: "checks" }, ...feeParts(g).map((x) => check(x.check, g[x.paid], (v) => patchGroup(g, { [x.paid]: v })))),
         d > 0 ? el("span", { class: "pill warn" }, document.createTextNode("Falta pagar no pedido "), el("b", { class: "num", text: money(d) }))
           : el("span", { class: "pill ok", text: "Pedido pago" }));
-      if (!m.length) note("Nenhum card neste pedido ainda. Adicione pelo botão Pedidos.");
+      if (!m.length) note("Nenhum card neste pedido ainda. Toque no pedido para adicionar.");
       else if (here.length < m.length) note(`${m.length - here.length} de ${m.length} cards já saíram de Pagamento.`);
     } else if (tab === "arr") {
       const arrived = countIn("col"), waiting = countIn("pay");
@@ -1641,8 +1701,6 @@
     const bc = binderCards();
     const wc = wishCards();
     const payDue = sm.dueSum;
-    const withDate = arr.filter((c) => c.expected_on).sort((a, b) => a.expected_on.localeCompare(b.expected_on));
-    const next = withDate[0];
 
     // 1) precisa de atenção
     const tiles = el("div", { class: "tiles" },
@@ -1653,7 +1711,7 @@
       el("button", { class: "tile" + (arr.length ? " info-t" : ""), type: "button", onclick: () => go("compras", "arr") },
         el("span", { class: "label", text: "A caminho" }),
         el("span", { class: "value num", text: arr.length }),
-        el("span", { class: "sub", text: next ? "próxima prevista para " + fmtDate(next.expected_on) : arr.length ? "sem previsão de chegada" : "nenhum card a caminho" })),
+        el("span", { class: "sub", text: arr.length ? "pagos, esperando chegar" : "nenhum card a caminho" })),
       el("button", { class: "tile tile-binder", type: "button", onclick: () => go("binder") },
         el("span", { class: "label", text: "No Binder" }),
         el("span", { class: "value num", text: bc.length }),
@@ -1673,13 +1731,8 @@
           onclick: () => { const ch = Object.fromEntries(parts(c).map((x) => [x.paid, true])); patch(c, ch, allPaid({ ...c, ...ch }) ? "Tudo pago! Foi para Chegada." : "Pago. Faltam os fretes do pedido."); } })) })),
     ].sort((a, b) => a.when.localeCompare(b.when));
 
-    // 3) próximas chegadas (com previsão primeiro)
-    const arrList = [...withDate, ...arr.filter((c) => !c.expected_on)].slice(0, 5);
-    // 4) compras recentes
-    const recent = [...sm.list].sort((a, b) => buyDate(b).localeCompare(buyDate(a)) || (b.created_at || "").localeCompare(a.created_at || "")).slice(0, 5);
-    const STAGE_PILL = { pay: ["warn", "Pagamento"], arr: ["ok", "A caminho"], col: ["accent", "Chegou"] };
-    // 5) últimos que chegaram
-    const lastIn = bc.slice(0, 8);
+    // 3) próximas chegadas: as compras mais antigas primeiro
+    const arrList = [...arr].sort((a, b) => buyDate(a).localeCompare(buyDate(b))).slice(0, 5);
 
     home.replaceChildren(
       tiles,
@@ -1688,27 +1741,20 @@
           payItems.length ? el("div", { class: "minis" }, ...payItems.slice(0, 5).map((x) => x.node))
             : el("p", { class: "box-empty", text: "Tudo pago por enquanto." })),
         box("Próximas chegadas", arr.length ? linkBtn("Ver todas", "compras", "arr") : null,
-          arrList.length ? el("div", { class: "minis" }, ...arrList.map((c) => mini(c, c.expected_on ? "previsão: " + fmtDate(c.expected_on) : "sem previsão",
+          arrList.length ? el("div", { class: "minis" }, ...arrList.map((c) => mini(c, "comprado em " + fmtDate(buyDate(c)),
             el("button", { class: "btn-ok btn-sm", type: "button", text: "Chegou ✓", "aria-label": "Chegou: " + c.name,
               onclick: () => patch(c, { arrived: true, arrived_at: new Date().toISOString() }, "Chegou! Já está no Binder.") }))))
-            : el("p", { class: "box-empty", text: "Nenhum card a caminho." })),
-        box("Compras recentes", linkBtn("Ver compras", "compras"),
-          el("div", { class: "minis" }, ...recent.map((c) => {
-            const [k, t] = STAGE_PILL[stage(c)];
-            return mini(c, fmtDate(buyDate(c)) + " · " + (c.gift ? "Presente" : money(total(c))), el("span", { class: "pill " + k, text: t }));
-          }))),
-        box("Últimos no Binder", bc.length ? linkBtn("Abrir o Binder", "binder") : null,
-          lastIn.length ? el("div", { class: "strip" }, ...lastIn.map((c) => el("button", { class: "strip-item", type: "button", "aria-label": c.name, title: c.name, onclick: () => openCard(c) }, thumb(c))))
-            : el("p", { class: "box-empty", text: "Quando uma compra chegar ou você adicionar um card ao Binder, a foto aparece aqui." }))));
+            : el("p", { class: "box-empty", text: "Nenhum card a caminho." }))));
+
   }
 
   // ---------- Compras ----------
   const KIND_FILTERS = [["individual-nacional", "Individual Nacional"], ["individual-internacional", "Individual Internacional"], ["ceg-nacional", "CEG Nacional"], ["ceg-internacional", "CEG Internacional"], ["gift", "Presente"]];
-  const kindKey = (c) => (c.purchase_type || "individual") + "-" + (c.origin || "nacional");
-  const filtering = () => !!(filt.q || filt.artist || filt.seller || filt.kind);
+  // a categoria de um card num pedido é a do pedido (o card pode ter ficado com a categoria antiga)
+  const kindKey = (c) => { const src = grp(c) || c; return (src.purchase_type || "individual") + "-" + (src.origin || "nacional"); };
+  const filtering = () => !!(filt.q || filt.artist || filt.kind);
   const matches = (c) => (!filt.q || c.name.toLowerCase().includes(filt.q))
     && (!filt.artist || (filt.artist === "-" ? !c.artist : (c.artist || "").toLowerCase() === filt.artist))
-    && (!filt.seller || (filt.seller === "-" ? !c.seller : (c.seller || "").toLowerCase() === filt.seller))
     && (!filt.kind || (filt.kind === "gift" ? c.gift : !c.gift && kindKey(c) === filt.kind));
   function fillSelect(sel, all, opts) {
     const cur = sel.value;
@@ -1725,19 +1771,17 @@
   }
   function renderFilters(list) {
     fillSelect($("qArtist"), "Todos os grupos", distinct(list, "artist", "Sem grupo de K-pop"));
-    fillSelect($("qSeller"), "Todos os vendedores", distinct(list, "seller", "Sem vendedor"));
     fillSelect($("qKind"), "Todas as categorias", KIND_FILTERS);
     $("qArtist").hidden = $("qArtist").options.length < 2;
-    $("qSeller").hidden = $("qSeller").options.length < 2;
-    filt.artist = $("qArtist").value; filt.seller = $("qSeller").value;
+    filt.artist = $("qArtist").value;
     $("qClear").hidden = !filtering();
     $("filters").hidden = !list.length;
   }
-  [["qArtist", "artist"], ["qSeller", "seller"], ["qKind", "kind"]].forEach(([id, k]) => $(id).addEventListener("change", () => { filt[k] = $(id).value; render(); }));
+  [["qArtist", "artist"], ["qKind", "kind"]].forEach(([id, k]) => $(id).addEventListener("change", () => { filt[k] = $(id).value; render(); }));
   $("qName").addEventListener("input", () => { filt.q = $("qName").value.trim().toLowerCase(); render(); });
   $("qClear").addEventListener("click", () => {
-    Object.assign(filt, { q: "", artist: "", seller: "", kind: "" });
-    $("qName").value = ""; $("qArtist").value = ""; $("qSeller").value = ""; $("qKind").value = "";
+    Object.assign(filt, { q: "", artist: "", kind: "" });
+    $("qName").value = ""; $("qArtist").value = ""; $("qKind").value = "";
     render();
   });
 
@@ -1844,18 +1888,6 @@
       el("div", { class: "split-legend" }, ...parts.map(([l, v], i) => el("span", { class: "leg" },
         el("i", { class: "sp-" + i, "aria-hidden": "true" }), el("b", { text: l }), el("span", { class: "num", text: `${money(v)} · ${pct(v)}` })))));
   }
-  function sumBy(list, keyFn) {
-    const m = new Map();
-    list.forEach((c) => { const k = keyFn(c); const cur = m.get(k) || [k, 0, 0]; cur[1] = cents(cur[1] + total(c)); cur[2]++; m.set(k, cur); });
-    return [...m.values()].filter((r) => r[1] > 0).sort((a, b) => b[1] - a[1]).map(([k, v, n]) => [k, v, plural(n, "card", "cards")]);
-  }
-  const cardsN = (n) => plural(n, "card", "cards");
-  // quantos cards por grupo de K-pop (Binder e Wishlist não têm valores)
-  function countBy(list) {
-    const m = new Map();
-    list.forEach((c) => { const k = c.artist || "Sem grupo de K-pop"; const key = k.toLowerCase(); const cur = m.get(key) || [k, 0]; cur[1]++; m.set(key, cur); });
-    return [...m.values()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 10);
-  }
   function renderFin(sm) {
     const fin = $("fin");
     if (loading) { fin.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Carregando…" }))); return; }
@@ -1867,7 +1899,6 @@
       const v = Number(src[x.key]) || 0;
       if (x.key === "import_tax") tax += v; else ship += v;
     }));
-    const groupFees = cents(groups.reduce((s, g) => s + fees(g), 0));
     const kpi = (label, value, sub, cls) => el("div", { class: "kpi" + (cls ? " " + cls : "") },
       el("span", { class: "label", text: label }), el("span", { class: "value num", text: money(value) }), sub ? el("span", { class: "sub", text: sub }) : null);
 
@@ -1885,7 +1916,6 @@
     groups.forEach((g) => addMonth((g.created_at || "").slice(0, 10), fees(g)));
     const monthRows = [...months.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12)
       .map(([k, v]) => [`${MES[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`, v]);
-    const feeNote = groupFees > 0 ? `Fretes e taxas de pedidos (${money(groupFees)}) não entram aqui, porque valem para vários cards.` : null;
 
     fin.replaceChildren(
       el("div", { class: "kpis" },
@@ -1900,11 +1930,7 @@
         el("p", { class: "hint", text: "Pela data da compra. Fretes de pedido entram no mês em que o pedido foi criado." })),
       el("div", { class: "home-grid" },
         box("Por mês", null, bars(monthRows, null)),
-        box("Por categoria", null, bars(catRows, gifts ? plural(gifts, "presente sem custo", "presentes sem custo") + " fora da conta." : null)),
-        box("Por grupo de K-pop", null, bars(sumBy(list, (c) => c.artist || "Sem grupo de K-pop"), feeNote)),
-        box("Por vendedor", null, bars(sumBy(list, (c) => c.seller || "Sem vendedor"), feeNote)),
-        box("Coleção por grupo", linkBtn("Abrir o Binder", "binder"), bars(countBy(binderCards()), null, cardsN, "O Binder ainda está vazio.")),
-        box("Wishlist por grupo", linkBtn("Abrir a Wishlist", "wishlist"), bars(countBy(wishCards()), null, cardsN, "A Wishlist está vazia."))),
+        box("Por categoria", null, bars(catRows, gifts ? plural(gifts, "presente sem custo", "presentes sem custo") + " fora da conta." : null))),
       sm.dueSum > 0 ? el("div", { class: "fin-foot" },
         el("span", { text: `Falta pagar ${money(sm.dueSum)}.` }),
         el("button", { class: "btn-primary", type: "button", text: "Ver pagamentos pendentes", onclick: () => go("compras", "pay") })) : null);
