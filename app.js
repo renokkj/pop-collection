@@ -21,12 +21,13 @@
   let cards = [];
   let groups = []; // pedidos de cards da mesma compra
   let groupsById = new Map();
+  let folders = []; // pastas do Binder (e, depois, da Wishlist)
   let archived = { total: 0, count: 0 };
   let photoUrls = new Map(); // image_path -> signed url
   let tab = "pay";
   try { const t = localStorage.getItem("pc-tab"); if (["pay", "arr", "col"].includes(t)) tab = t; } catch (e) {}
   // seção aberta (fica no endereço: #inicio, #compras, #financeiro)
-  const SECS = ["inicio", "compras", "financeiro"];
+  const SECS = ["inicio", "compras", "binder", "financeiro"];
   let sec = SECS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "inicio";
   // filtros de Compras
   const filt = { q: "", artist: "", seller: "", kind: "" };
@@ -185,15 +186,18 @@
   // ---------- dados ----------
   async function loadAll() {
     try {
-      const [{ data: rows, error: e1 }, { data: st, error: e2 }, { data: gs, error: e3 }] = await Promise.all([
+      const [{ data: rows, error: e1 }, { data: st, error: e2 }, { data: gs, error: e3 }, { data: fs, error: e4 }] = await Promise.all([
         sb.from("cards").select("*").order("created_at", { ascending: false }).order("name"),
         sb.from("stats").select("*").maybeSingle(),
         sb.from("card_groups").select("*").order("created_at", { ascending: false }),
+        sb.from("folders").select("*").order("position").order("created_at"),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
       if (e3) throw e3;
+      if (e4) throw e4;
       cards = rows || [];
+      folders = fs || [];
       setGroups(gs || []);
       archived = { total: Number(st?.archived_total) || 0, count: Number(st?.archived_count) || 0 };
       await signPhotos();
@@ -204,7 +208,7 @@
   }
 
   async function signPhotos() {
-    const need = cards.map((c) => c.image_path).filter((p) => p && !photoUrls.has(p));
+    const need = [...cards.map((c) => c.image_path), ...folders.map((f) => f.cover_path)].filter((p) => p && !photoUrls.has(p));
     if (!need.length) return;
     const { data } = await sb.storage.from(BUCKET).createSignedUrls(need, 60 * 60 * 6);
     (data || []).forEach((d) => { if (d.signedUrl) photoUrls.set(d.path, d.signedUrl); });
@@ -255,7 +259,7 @@
     const url = URL.createObjectURL(file);
     try {
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-      const s = Math.min(1, 360 / img.width, 560 / img.height);
+      const s = Math.min(1, 390 / img.width, 600 / img.height);
       const cv = document.createElement("canvas");
       cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s);
       cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
@@ -425,6 +429,7 @@
   });
   function openForm() {
     fillGroupSelect();
+    fFolder.refresh();
     updateKindFields();
     if (!dlg.open) dlg.showModal();
     entries[0].name.focus();
@@ -441,7 +446,6 @@
   $("addClose").addEventListener("click", closeForm);
   function openNewBuy() { if (editing) resetForm(); openForm(); }
   $("openAdd").addEventListener("click", openNewBuy);
-  $("sideAdd").addEventListener("click", openNewBuy);
   function startEdit(c) {
     if (saving) return;
     resetForm();
@@ -460,6 +464,7 @@
     setRadio("fOrigin", c.origin || "nacional");
     $("fGroup").value = grp(c) ? c.group_id : "";
     $("fGift").checked = !!c.gift;
+    fFolder.set(c.folder_id);
     const src = c.image_path && photoUrls.get(c.image_path);
     if (src) showPhoto(e, src);
     openForm();
@@ -472,6 +477,7 @@
     $("entries").replaceChildren();
     $("addForm").reset();
     $("fDate").value = today();
+    if (typeof fFolder !== "undefined") fFolder.set("");
     addEntry(false);
   }
 
@@ -484,6 +490,7 @@
     if (blank) { blank.name.focus(); return; }
     const noArtist = !editing && entries.find((e) => !e.artist.value.trim());
     if (noArtist) { noArtist.artist.focus(); return; }
+    if (fFolder.needsName()) { fFolder.name.focus(); return; }
     const target = editing;
     saving = true;
     $("fSubmit").disabled = true; $("fCancel").disabled = true; $("formMsg").textContent = "Salvando…";
@@ -497,6 +504,7 @@
         created = data;
       }
       const g = created || (mode ? groupsById.get(mode) : null);
+      const folder_id = await fFolder.value();
       let photoFails = 0;
       await Promise.all(entries.map(async (e) => {
         e.path = null;
@@ -509,7 +517,7 @@
       // num pedido, os fretes próprios do card não são tocados (ficam guardados)
       const values = (e) => {
         const base = { name: e.name.value.trim(), seller: e.seller.value.trim() || null, artist: artistName(e.artist.value),
-          purchased_on: $("fDate").value || today(), expected_on: $("fExpected").value || null };
+          purchased_on: $("fDate").value || today(), expected_on: $("fExpected").value || null, folder_id };
         // presente: zera os valores e marca tudo como pago
         if (gift) return { ...base, gift: true, group_id: g ? g.id : null, purchase_type: g ? g.purchase_type : t, origin: g ? g.origin : o, price: 0, shipping: 0, shipping_to_gom: 0, import_tax: 0,
           paid_price: true, paid_shipping: true, paid_shipping_to_gom: true, paid_tax: true };
@@ -622,7 +630,7 @@
       const list = m.filter((c) => stage(c) === st);
       if (!list.length) return null;
       const all = st === "arr" && list.length > 1 ? el("button", { class: "btn-ok", type: "button", text: `Todos os ${list.length} chegaram ✓`,
-        onclick: () => patchMany(list, { arrived: true, arrived_at: new Date().toISOString() }, `${list.length} cards chegaram! Estão em Concluídas.`) }) : null;
+        onclick: () => patchMany(list, { arrived: true, arrived_at: new Date().toISOString() }, `${list.length} cards chegaram! Já estão no Binder.`) }) : null;
       return el("section", { class: "gsection" },
         el("div", { class: "gsection-head" }, el("h3", {}, document.createTextNode(name + " "), el("span", { class: "count", text: list.length })), all),
         el("div", { class: "table" }, ...list.map((c) => fn(c, true))));
@@ -782,15 +790,30 @@
   $("openGroups").addEventListener("click", openGroups);
 
   // ---------- botão flutuante do celular ----------
+  // Em Compras e no Binder o + abre direto o cadastro daquela seção; nas outras, as opções.
   function setFab(open) {
     $("fabMenu").hidden = !open; $("fabShade").hidden = !open;
     $("fabMain").setAttribute("aria-expanded", String(open));
-    $("fabMain").setAttribute("aria-label", open ? "Fechar opções" : "Abrir opções de cadastro");
+    $("fabMain").setAttribute("aria-label", open ? "Fechar opções" : sec === "compras" ? "Registrar compra" : sec === "binder" ? "Adicionar ao Binder" : "Abrir opções de cadastro");
   }
-  $("fabMain").addEventListener("click", () => setFab($("fabMenu").hidden));
+  function addAction(kind) {
+    setFab(false); setSideMenu(false);
+    if (kind === "binder") openBinderForm(null);
+    else openNewBuy();
+  }
+  $("fabMain").addEventListener("click", () => {
+    if (!$("fabMenu").hidden) return setFab(false);
+    if (sec === "compras") return addAction("buy");
+    if (sec === "binder") return addAction("binder");
+    setFab(true);
+  });
+  document.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => addAction(b.dataset.add)));
+  // computador: o "+ Novo" da barra lateral abre as mesmas opções
+  function setSideMenu(open) { $("sideMenu").hidden = !open; $("sideAdd").setAttribute("aria-expanded", String(open)); }
+  $("sideAdd").addEventListener("click", () => setSideMenu($("sideMenu").hidden));
+  document.addEventListener("click", (e) => { if (!$("sideMenu").hidden && !e.target.closest(".side-new")) setSideMenu(false); });
   $("fabShade").addEventListener("click", () => setFab(false));
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("fabMenu").hidden) setFab(false); });
-  $("fabAdd").addEventListener("click", () => { setFab(false); openNewBuy(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if (!$("fabMenu").hidden) setFab(false); setSideMenu(false); } });
   $("fabGroups").addEventListener("click", () => { setFab(false); openGroups(); });
   $("gNew").addEventListener("click", () => openGroupForm(null, true));
   $("gBack").addEventListener("click", () => { if (!gSaving) showGroupList(); });
@@ -865,6 +888,461 @@
     toast("Card apagado.");
     render();
   }
+  // ---------- Binder ----------
+  // No Binder ficam os cards cadastrados direto nele e as compras que chegaram
+  // (a não ser que a pessoa tenha tirado a compra do Binder: in_binder = false).
+  const inBinder = (c) => c.kind === "binder" || (isBuy(c) && c.arrived && c.in_binder !== false);
+  const addedAt = (c) => c.arrived_at || c.created_at || "";
+  const binderCards = () => cards.filter(inBinder).sort((a, b) => addedAt(b).localeCompare(addedAt(a)));
+  const folderById = (id) => folders.find((f) => f.id === id) || null;
+  const scopeFolders = (scope) => folders.filter((f) => f.scope === scope);
+  let bFolder = "all"; // "all", "none" ou o id da pasta aberta
+  const bFilt = { q: "", artist: "" };
+  let selecting = false;
+  const selected = new Set();
+
+  async function createFolder(name, scope) {
+    const position = scopeFolders(scope).reduce((m, f) => Math.max(m, f.position || 0), 0) + 1;
+    const { data, error } = await sb.from("folders").insert({ name, scope, position }).select().single();
+    if (error) throw error;
+    folders.push(data);
+    return data;
+  }
+
+  // campo "Pasta" com "+ Nova pasta" que cria a pasta sem sair do formulário
+  function folderPicker(wrap, scope, label) {
+    const sel = el("select", {});
+    const name = el("input", { type: "text", placeholder: "Nome da nova pasta", maxlength: "60", "aria-label": "Nome da nova pasta", hidden: "" });
+    wrap.replaceChildren(el("label", { class: "f" }, label, sel), name);
+    wrap.classList.add("folderpick");
+    const p = {
+      refresh(keep) {
+        const cur = keep !== undefined ? keep : sel.value;
+        sel.replaceChildren(el("option", { value: "", text: "Sem pasta" }), el("option", { value: "new", text: "+ Nova pasta" }),
+          ...scopeFolders(scope).map((f) => el("option", { value: f.id, text: f.name })));
+        sel.value = cur === "new" || folderById(cur) ? cur : "";
+        name.hidden = sel.value !== "new";
+      },
+      set(id) { name.value = ""; p.refresh(id || ""); },
+      // devolve o id da pasta (criando a nova, se for o caso) ou null
+      async value() {
+        if (sel.value !== "new") return sel.value || null;
+        const n = name.value.trim();
+        if (!n) return null;
+        const f = await createFolder(n, scope);
+        p.refresh(f.id);
+        return f.id;
+      },
+      needsName: () => sel.value === "new" && !name.value.trim(),
+      name,
+    };
+    sel.addEventListener("change", () => { name.hidden = sel.value !== "new"; if (!name.hidden) name.focus(); });
+    p.refresh("");
+    return p;
+  }
+  const fFolder = folderPicker($("fFolderWrap"), "binder", "Pasta no Binder (opcional)");
+
+  // ---------- cadastro direto no Binder ----------
+  const bdlg = $("binderDialog");
+  const bdFolder = folderPicker($("bdFolderWrap"), "binder", "Pasta (opcional)");
+  let bdEntries = [], bdEditing = null, bdSaving = false, bdLast = null;
+  function makeBEntry() {
+    const e = { photoBlob: null, previewUrl: null, path: null };
+    e.name = el("input", { type: "text", placeholder: "ex.: Karina · Armageddon POB", maxlength: "120" });
+    e.artist = el("input", { type: "text", list: "artistList", placeholder: "ex.: aespa, TWICE", maxlength: "60" });
+    e.file = el("input", { type: "file", accept: "image/*", "aria-label": "Foto do photocard" });
+    e.dropText = el("span", {}, "+ foto", ...(PASTE_KEY ? [el("small", { class: "paste-tip", text: `ou ${PASTE_KEY}` })] : []));
+    e.drop = el("label", { class: "drop", title: "Foto do photocard" }, e.dropText, e.file);
+    e.file.addEventListener("change", () => { const f = e.file.files && e.file.files[0]; if (f) setPhoto(e, f); });
+    e.num = el("span", { class: "entry-n" });
+    e.removeBtn = el("button", { class: "icon-btn", type: "button", text: "Remover", onclick: () => {
+      if (bdEntries.length < 2) return;
+      if (e.previewUrl) URL.revokeObjectURL(e.previewUrl);
+      e.node.remove(); bdEntries = bdEntries.filter((x) => x !== e); bdLabels();
+    } });
+    e.head = el("div", { class: "entry-head" }, e.num, e.removeBtn);
+    e.node = el("div", { class: "entry" }, e.head, e.drop,
+      el("div", { class: "fields fields-2" },
+        el("label", { class: "f name" }, "Nome do photocard", e.name),
+        el("label", { class: "f artist" }, "Grupo de K-pop", e.artist)));
+    const mark = () => (bdLast = e);
+    e.node.addEventListener("focusin", mark); e.node.addEventListener("pointerdown", mark);
+    return e;
+  }
+  function bdAdd(focus) {
+    const prev = bdEntries[bdEntries.length - 1];
+    const e = makeBEntry();
+    if (prev && prev.artist.value) e.artist.value = prev.artist.value;
+    bdEntries.push(e); $("bdEntries").append(e.node);
+    bdLabels();
+    if (focus) e.name.focus();
+  }
+  function bdLabels() {
+    const n = bdEntries.length;
+    bdEntries.forEach((e, i) => { e.num.textContent = "Photocard " + (i + 1); e.head.hidden = n === 1; });
+    $("bdMore").hidden = !!bdEditing;
+    $("bdTitle").textContent = bdEditing ? "Editar photocard" : "Adicionar ao Binder";
+    $("bdSubmit").textContent = bdEditing ? "Salvar alterações" : n > 1 ? `Adicionar ${n} photocards` : "Adicionar ao Binder";
+    $("bdMsg").textContent = bdEditing ? "" : n > 1 ? `${n} cards` : "";
+  }
+  function bdReset() {
+    bdEntries.forEach((e) => { if (e.previewUrl) URL.revokeObjectURL(e.previewUrl); });
+    bdEntries = []; bdEditing = null; bdLast = null;
+    $("bdEntries").replaceChildren(); $("bdErr").hidden = true;
+    bdFolder.set(bFolder !== "all" && bFolder !== "none" ? bFolder : "");
+    bdAdd(false);
+  }
+  function openBinderForm(c) {
+    if (bdSaving) return;
+    bdReset();
+    if (c) {
+      bdEditing = c;
+      const e = bdEntries[0];
+      e.name.value = c.name; e.artist.value = c.artist || "";
+      const src = c.image_path && photoUrls.get(c.image_path);
+      if (src) showPhoto(e, src);
+      bdFolder.set(c.folder_id);
+    }
+    bdLabels();
+    if (!bdlg.open) bdlg.showModal();
+    bdEntries[0].name.focus();
+  }
+  function closeBinderForm() { if (!bdSaving && bdlg.open) bdlg.close(); }
+  bdlg.addEventListener("close", () => { if (!bdSaving) bdReset(); });
+  bdlg.addEventListener("cancel", (e) => { if (bdSaving) e.preventDefault(); });
+  bdlg.addEventListener("click", (e) => { if (e.target === bdlg) closeBinderForm(); });
+  bdlg.addEventListener("paste", (ev) => {
+    const file = pastedImage(ev);
+    if (!file) return;
+    ev.preventDefault();
+    const target = (bdEntries.includes(bdLast) && bdLast) || bdEntries.find((x) => !x.photoBlob && !x.drop.querySelector("img")) || bdEntries[bdEntries.length - 1];
+    setPhoto(target, file);
+  });
+  $("bdClose").addEventListener("click", closeBinderForm);
+  $("bdCancel").addEventListener("click", closeBinderForm);
+  $("bdMore").addEventListener("click", () => bdAdd(true));
+  $("bAdd").addEventListener("click", () => openBinderForm(null));
+  function bdError(msg, focus) {
+    $("bdErr").textContent = msg; $("bdErr").hidden = false;
+    if (focus) focus.focus();
+  }
+  $("bdForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    $("bdErr").hidden = true;
+    for (const e of bdEntries) {
+      if (!e.photoBlob && !e.drop.querySelector("img")) return bdError("Falta a foto" + (bdEntries.length > 1 ? " de um dos cards." : "."), e.drop.querySelector("input"));
+      if (!e.name.value.trim()) return bdError("Falta o nome do photocard.", e.name);
+      if (!e.artist.value.trim()) return bdError("Falta o grupo de K-pop.", e.artist);
+    }
+    if (bdFolder.needsName()) return bdError("Dê um nome para a pasta nova.", bdFolder.name);
+    bdSaving = true;
+    $("bdSubmit").disabled = $("bdCancel").disabled = true;
+    const uploaded = [];
+    try {
+      const folder_id = await bdFolder.value();
+      for (const e of bdEntries) {
+        e.path = null;
+        if (!e.photoBlob) continue;
+        const path = `${user.id}/${crypto.randomUUID()}.jpg`;
+        const { error } = await sb.storage.from(BUCKET).upload(path, e.photoBlob, { contentType: "image/jpeg" });
+        if (error) throw error;
+        e.path = path; uploaded.push(path);
+      }
+      const keep = (e) => { if (e.path && e.previewUrl) { photoUrls.set(e.path, e.previewUrl); e.previewUrl = null; } };
+      if (bdEditing) {
+        const e = bdEntries[0], c = bdEditing;
+        const v = { name: e.name.value.trim(), artist: artistName(e.artist.value), folder_id };
+        if (e.path) v.image_path = e.path;
+        const { data, error } = await sb.from("cards").update(v).eq("id", c.id).select().single();
+        if (error) throw error;
+        if (e.path && c.image_path) sb.storage.from(BUCKET).remove([c.image_path]);
+        Object.assign(c, data); keep(e);
+        toast("Alterações salvas.");
+      } else {
+        const now = new Date().toISOString();
+        const rows = bdEntries.map((e) => ({ kind: "binder", name: e.name.value.trim(), artist: artistName(e.artist.value), image_path: e.path, folder_id,
+          arrived: true, arrived_at: now, purchased_on: null }));
+        const { data, error } = await sb.from("cards").insert(rows).select();
+        if (error) throw error;
+        bdEntries.forEach(keep);
+        cards.unshift(...data);
+        const f = folderById(folder_id);
+        toast((data.length > 1 ? `${data.length} cards adicionados ao Binder` : "Card adicionado ao Binder") + (f ? ` · pasta ${f.name}.` : "."));
+      }
+      bdSaving = false; closeBinderForm();
+      if (sec !== "binder") go("binder"); else render();
+    } catch (err) {
+      if (uploaded.length) sb.storage.from(BUCKET).remove(uploaded);
+      bdError("Não foi possível salvar. Confira a conexão e tente de novo.");
+    } finally {
+      bdSaving = false;
+      $("bdSubmit").disabled = $("bdCancel").disabled = false;
+      if (bdlg.open) bdLabels();
+      render();
+    }
+  });
+
+  // ---------- pastas: criar, renomear, capa e excluir ----------
+  const fdlg = $("folderDialog");
+  let fdEditing = null, fdScope = "binder", fdCover = undefined, fdBlob = null, fdSaving = false;
+  function openFolder(f, scope) {
+    fdEditing = f; fdScope = f ? f.scope : scope || "binder"; fdCover = f ? f.cover_path : null; fdBlob = null;
+    $("fdForm").reset();
+    $("fdName").value = f ? f.name : "";
+    $("fdTitle").textContent = f ? "Editar pasta" : "Nova pasta";
+    $("fdSubmit").textContent = f ? "Salvar pasta" : "Criar pasta";
+    $("fdDelete").hidden = !f; $("fdDelConfirm").hidden = true;
+    renderCovers();
+    if (!fdlg.open) fdlg.showModal();
+    $("fdName").focus();
+  }
+  function folderCards(f) { return cards.filter((c) => c.folder_id === f.id && (f.scope === "binder" ? inBinder(c) : true)); }
+  function renderCovers() {
+    const f = fdEditing;
+    const list = f ? folderCards(f).filter((c) => c.image_path && photoUrls.get(c.image_path)).slice(0, 18) : [];
+    $("fdCoverWrap").hidden = !f && !fdBlob;
+    const opts = [];
+    if (fdBlob) opts.push(["upload", URL.createObjectURL(fdBlob)]);
+    else if (fdCover && !list.some((c) => c.image_path === fdCover) && photoUrls.get(fdCover)) opts.push([fdCover, photoUrls.get(fdCover)]);
+    list.forEach((c) => opts.push([c.image_path, photoUrls.get(c.image_path)]));
+    const cur = fdBlob ? "upload" : fdCover;
+    $("fdCovers").replaceChildren(...(opts.length ? opts.map(([key, src]) => el("button", { type: "button", class: "cover-opt" + (key === cur ? " on" : ""), "aria-pressed": String(key === cur),
+      onclick: () => { if (key !== "upload") { fdBlob = null; fdCover = key; } renderCovers(); } }, el("img", { src, alt: "" })))
+      : [el("p", { class: "hint", text: f ? "Sem fotos nesta pasta ainda. Envie uma imagem ou deixe a capa automática (a foto mais recente)." : "" })]));
+  }
+  $("fdFile").addEventListener("change", async () => {
+    const file = $("fdFile").files && $("fdFile").files[0];
+    if (!file) return;
+    try { fdBlob = await shrink(file); renderCovers(); } catch (e) { toast("Não deu para ler essa imagem."); }
+  });
+  function closeFolder() { if (!fdSaving && fdlg.open) fdlg.close(); }
+  $("fdClose").addEventListener("click", closeFolder);
+  $("fdCancel").addEventListener("click", closeFolder);
+  fdlg.addEventListener("click", (e) => { if (e.target === fdlg) closeFolder(); });
+  fdlg.addEventListener("cancel", (e) => { if (fdSaving) e.preventDefault(); });
+  $("fdForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const name = $("fdName").value.trim();
+    if (!name) return $("fdName").focus();
+    fdSaving = true; $("fdSubmit").disabled = true;
+    try {
+      let cover = fdCover || null;
+      if (fdBlob) {
+        const path = `${user.id}/pastas/${crypto.randomUUID()}.jpg`;
+        const { error } = await sb.storage.from(BUCKET).upload(path, fdBlob, { contentType: "image/jpeg" });
+        if (error) throw error;
+        photoUrls.set(path, URL.createObjectURL(fdBlob));
+        cover = path;
+      }
+      if (fdEditing) {
+        const old = fdEditing.cover_path;
+        const { data, error } = await sb.from("folders").update({ name, cover_path: cover }).eq("id", fdEditing.id).select().single();
+        if (error) throw error;
+        Object.assign(fdEditing, data);
+        if (old && old !== cover && old.includes("/pastas/")) sb.storage.from(BUCKET).remove([old]);
+        toast("Pasta salva.");
+      } else {
+        const f = await createFolder(name, fdScope);
+        if (cover) { await sb.from("folders").update({ cover_path: cover }).eq("id", f.id); f.cover_path = cover; }
+        bFolder = f.id;
+        toast(`Pasta "${name}" criada. Use Selecionar para colocar cards nela.`);
+      }
+      fdSaving = false; closeFolder();
+    } catch (err) {
+      toast("Não foi possível salvar a pasta. Tente de novo.");
+    } finally { fdSaving = false; $("fdSubmit").disabled = false; render(); }
+  });
+  $("fdDelete").addEventListener("click", () => {
+    const f = fdEditing; if (!f) return;
+    const n = folderCards(f).length;
+    $("fdDelConfirm").replaceChildren(
+      el("span", { text: `Excluir a pasta "${f.name}"? ${n ? `${plural(n, "O card continua", `Os ${n} cards continuam`)} no Binder, só ${n === 1 ? "fica" : "ficam"} sem pasta.` : "Ela está vazia."}` }),
+      el("button", { class: "btn-danger strong", type: "button", text: "Sim, excluir pasta", onclick: () => deleteFolder(f) }),
+      el("button", { class: "btn-ghost", type: "button", text: "Cancelar", onclick: () => ($("fdDelConfirm").hidden = true) }));
+    $("fdDelConfirm").hidden = false;
+  });
+  async function deleteFolder(f) {
+    fdSaving = true;
+    const { error } = await sb.from("folders").delete().eq("id", f.id);
+    fdSaving = false;
+    if (error) { toast("Não foi possível excluir a pasta."); return; }
+    if (f.cover_path && f.cover_path.includes("/pastas/")) sb.storage.from(BUCKET).remove([f.cover_path]);
+    cards.forEach((c) => { if (c.folder_id === f.id) c.folder_id = null; });
+    folders = folders.filter((x) => x.id !== f.id);
+    if (bFolder === f.id) bFolder = "all";
+    closeFolder();
+    toast("Pasta excluída. Os cards continuam no Binder.");
+    render();
+  }
+
+  // ---------- detalhes de um photocard ----------
+  const cdlg = $("cardDialog");
+  let cdId = null, cdConfirm = false;
+  function openCard(c) { cdId = c.id; cdConfirm = false; refreshCard(); if (!cdlg.open) cdlg.showModal(); }
+  function closeCard() { if (cdlg.open) cdlg.close(); }
+  cdlg.addEventListener("close", () => { cdId = null; });
+  cdlg.addEventListener("click", (e) => { if (e.target === cdlg) closeCard(); });
+  $("cdClose").addEventListener("click", closeCard);
+  async function moveCards(list, folderId, msg) {
+    await patchMany(list, { folder_id: folderId }, msg);
+  }
+  function refreshCard() {
+    const c = cards.find((x) => x.id === cdId);
+    if (!c) { closeCard(); return; }
+    const src = c.image_path && photoUrls.get(c.image_path);
+    const pic = el("div", { class: "cd-pic" }, src ? el("img", { src, alt: c.name }) : el("span", { text: (c.name || "?").charAt(0).toUpperCase() }));
+    const rows = [];
+    const row = (label, value) => { if (value !== null && value !== undefined && value !== "") rows.push(el("dt", { text: label }), el("dd", {}, value)); };
+    row("Grupo de K-pop", c.artist || null);
+    const f = folderById(c.folder_id);
+    if (isBuy(c)) {
+      const g = grp(c);
+      row("Vendedor", c.seller);
+      row("Data da compra", fmtDate(buyDate(c)));
+      row("Categoria", c.gift ? "Presente (sem custo)" : kindLabel(c));
+      row("Pedido", g ? g.name : null);
+      if (!c.gift) {
+        row("Valores", el("div", { class: "money" },
+          ...parts(c).flatMap((x) => [el("span", { text: x.label }), el("span", { class: "num", text: money(c[x.key]) })]),
+          ...(g ? [el("span", { class: "note", text: "Fretes e taxa no pedido " + g.name })] : [el("span", { class: "tot", text: "Total" }), el("span", { class: "num tot", text: money(total(c)) })])));
+        row("Pagamento", "Pago integralmente");
+      }
+      row("Chegada", c.arrived_at ? "Chegou em " + new Date(c.arrived_at).toLocaleDateString("pt-BR") : "Chegou");
+    } else {
+      row("No Binder desde", c.created_at ? new Date(c.created_at).toLocaleDateString("pt-BR") : null);
+    }
+    if (c.wished_at) row("Na Wishlist desde", new Date(c.wished_at).toLocaleDateString("pt-BR"));
+
+    const move = el("select", { "aria-label": "Mover para a pasta" },
+      el("option", { value: "", text: "Sem pasta" }), ...scopeFolders("binder").map((x) => el("option", { value: x.id, text: x.name })));
+    move.value = c.folder_id || "";
+    move.addEventListener("change", () => { const to = folderById(move.value); moveCards([c], move.value || null, to ? `Movido para a pasta ${to.name}.` : "Card sem pasta agora."); });
+
+    let actions;
+    if (cdConfirm) {
+      actions = el("div", { class: "confirm cd-confirm" },
+        el("span", { text: isBuy(c) ? "Este card veio de uma compra. Tirar só do Binder mantém a compra e os valores em Compras › Concluídas." : `Excluir "${c.name}" do Binder? A foto também é apagada.` }),
+        isBuy(c) ? el("button", { class: "btn-ghost", type: "button", text: "Tirar só do Binder", onclick: () => { closeCard(); patch(c, { in_binder: false }, "Tirado do Binder. A compra continua em Concluídas."); } }) : null,
+        el("button", { class: "btn-danger strong", type: "button", text: isBuy(c) ? "Excluir card e compra" : "Sim, excluir", onclick: () => { closeCard(); removeCard(c); } }),
+        el("button", { class: "btn-ghost", type: "button", text: "Cancelar", onclick: () => { cdConfirm = false; refreshCard(); } }));
+    } else {
+      actions = el("div", { class: "cd-actions" },
+        el("button", { class: "btn-ghost", type: "button", text: "Editar", onclick: () => { closeCard(); isBuy(c) ? startEdit(c) : openBinderForm(c); } }),
+        el("button", { class: "btn-danger", type: "button", text: "Excluir", onclick: () => { cdConfirm = true; refreshCard(); } }));
+    }
+    $("cdTitle").textContent = c.name;
+    $("cdBody").replaceChildren(pic,
+      el("div", { class: "cd-info" },
+        el("span", { class: "tag", text: isBuy(c) ? (c.gift ? "Presente" : "Compra") : "Cadastrado no Binder" }),
+        el("label", { class: "f" }, "Pasta", move),
+        rows.length ? el("dl", { class: "cd-list" }, ...rows) : null,
+        actions));
+  }
+
+  // ---------- tela do Binder ----------
+  function folderTile(key, name, count, coverSrc, extra) {
+    const on = bFolder === key;
+    return el("button", { class: "folder" + (on ? " on" : ""), type: "button", role: "listitem", "aria-pressed": String(on), onclick: () => { bFolder = key; selected.clear(); render(); } },
+      el("span", { class: "folder-cover" + (coverSrc ? "" : " empty") }, coverSrc ? el("img", { src: coverSrc, alt: "", loading: "lazy" }) : null),
+      el("span", { class: "folder-name", text: name }),
+      el("span", { class: "folder-n", text: plural(count, "card", "cards") }), extra || null);
+  }
+  const coverOf = (f, list) => {
+    if (f.cover_path && photoUrls.get(f.cover_path)) return photoUrls.get(f.cover_path);
+    const c = list.find((x) => x.image_path && photoUrls.get(x.image_path));
+    return c ? photoUrls.get(c.image_path) : null;
+  };
+  [["bName", "q"]].forEach(([id, k]) => $(id).addEventListener("input", () => { bFilt[k] = $(id).value.trim().toLowerCase(); render(); }));
+  $("bArtist").addEventListener("change", () => { bFilt.artist = $("bArtist").value; render(); });
+  $("bSelect").addEventListener("click", () => { selecting = !selecting; selected.clear(); render(); });
+
+  function renderBinder() {
+    const all = binderCards();
+    const bf = scopeFolders("binder");
+    if (bFolder !== "all" && bFolder !== "none" && !folderById(bFolder)) bFolder = "all";
+    // pastas
+    const none = all.filter((c) => !c.folder_id || !folderById(c.folder_id));
+    const firstPic = (list) => { const c = list.find((x) => x.image_path && photoUrls.get(x.image_path)); return c ? photoUrls.get(c.image_path) : null; };
+    $("bFolders").replaceChildren(
+      folderTile("all", "Todos", all.length, firstPic(all)),
+      ...bf.map((f) => { const l = all.filter((c) => c.folder_id === f.id); return folderTile(f.id, f.name, l.length, coverOf(f, l)); }),
+      ...(bf.length && none.length ? [folderTile("none", "Sem pasta", none.length, firstPic(none))] : []),
+      el("button", { class: "folder folder-new", type: "button", onclick: () => openFolder(null, "binder") },
+        el("span", { class: "folder-cover empty" }, el("span", { text: "+" })), el("span", { class: "folder-name", text: "Nova pasta" })));
+    const open = folderById(bFolder);
+    $("bFolderHead").hidden = !open;
+    if (open) $("bFolderHead").replaceChildren(el("h2", { text: open.name }),
+      el("button", { class: "btn-ghost btn-sm", type: "button", text: "Editar pasta", onclick: () => openFolder(open) }));
+
+    // filtros
+    fillSelect($("bArtist"), "Todos os grupos", distinct(all, "artist", "Sem grupo de K-pop"));
+    $("bArtist").hidden = $("bArtist").options.length < 2;
+    bFilt.artist = $("bArtist").value;
+    $("bFilters").hidden = !all.length;
+    $("bSelect").hidden = !all.length;
+    $("bSelect").textContent = selecting ? "Cancelar seleção" : "Selecionar";
+
+    // cards antigos sem grupo de K-pop
+    const noArtist = all.filter((c) => !c.artist);
+    $("bNoArtist").hidden = !noArtist.length || selecting;
+    if (noArtist.length) $("bNoArtist").replaceChildren(
+      el("span", { text: `${plural(noArtist.length, "card está", "cards estão")} sem grupo de K-pop.` }),
+      el("button", { class: "btn-ghost btn-sm", type: "button", text: "Definir grupo", onclick: () => { selecting = true; selected.clear(); noArtist.forEach((c) => selected.add(c.id)); bFilt.artist = "-"; $("bArtist").value = "-"; render(); } }));
+
+    let list = bFolder === "all" ? all : bFolder === "none" ? none : all.filter((c) => c.folder_id === bFolder);
+    list = list.filter((c) => (!bFilt.q || c.name.toLowerCase().includes(bFilt.q))
+      && (!bFilt.artist || (bFilt.artist === "-" ? !c.artist : (c.artist || "").toLowerCase() === bFilt.artist)));
+
+    const grid = $("bGrid");
+    if (loading) grid.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Carregando seu Binder…" })));
+    else if (!all.length) grid.replaceChildren(el("div", { class: "empty binder-empty" },
+      el("div", { class: "cards-deco", "aria-hidden": "true" }, el("span"), el("span"), el("span")),
+      el("strong", { text: "Seu Binder está vazio" }),
+      el("span", { text: "Adicione os cards que você já tem, ou registre uma compra: quando ela chegar, o card aparece aqui sozinho." }),
+      el("div", { class: "form-btns" },
+        el("button", { class: "btn-primary", type: "button", text: "+ Adicionar ao Binder", onclick: () => openBinderForm(null) }),
+        el("button", { class: "btn-ghost", type: "button", text: "Registrar uma compra", onclick: () => openNewBuy() }))));
+    else if (!list.length) grid.replaceChildren(el("div", { class: "empty" },
+      el("strong", { text: open && !bFilt.q && !bFilt.artist ? "Pasta vazia" : "Nenhum card aqui" }),
+      el("span", { text: open && !bFilt.q && !bFilt.artist ? "Toque em Selecionar, marque os cards e mova para esta pasta." : "Mude a busca ou o filtro." })));
+    else grid.replaceChildren(...list.map((c) => {
+      const src = c.image_path && photoUrls.get(c.image_path);
+      const on = selected.has(c.id);
+      return el("button", { class: "pc" + (on ? " on" : ""), type: "button", "aria-label": c.name, "aria-pressed": selecting ? String(on) : null, title: c.name,
+        onclick: () => { if (!selecting) return openCard(c); on ? selected.delete(c.id) : selected.add(c.id); render(); } },
+        src ? el("img", { src, alt: "", loading: "lazy" }) : el("span", { class: "pc-ph", text: (c.name || "?").charAt(0).toUpperCase() }),
+        selecting ? el("span", { class: "pc-check", "aria-hidden": "true", text: on ? "✓" : "" }) : null);
+    }));
+
+    // barra de seleção: mover para pasta e definir grupo
+    const bar = $("bSelBar");
+    bar.hidden = !selecting;
+    if (selecting) {
+      const sel = all.filter((c) => selected.has(c.id));
+      const to = el("select", { "aria-label": "Mover para a pasta" }, el("option", { value: "", text: "Mover para…" }),
+        ...bf.map((f) => el("option", { value: f.id, text: f.name })), el("option", { value: "none", text: "Sem pasta" }), el("option", { value: "new", text: "+ Nova pasta" }));
+      to.disabled = !sel.length;
+      to.addEventListener("change", async () => {
+        let id = to.value;
+        if (id === "new") {
+          const name = (prompt("Nome da nova pasta") || "").trim();
+          if (!name) { to.value = ""; return; }
+          try { id = (await createFolder(name, "binder")).id; } catch (e) { toast("Não foi possível criar a pasta."); return; }
+        }
+        const f = folderById(id);
+        await moveCards(sel, f ? f.id : null, `${plural(sel.length, "card movido", "cards movidos")} ${f ? "para " + f.name : "para Sem pasta"}.`);
+        selecting = false; selected.clear(); render();
+      });
+      const art = el("input", { type: "text", list: "artistList", placeholder: "Grupo de K-pop", maxlength: "60", "aria-label": "Grupo de K-pop para os selecionados" });
+      bar.replaceChildren(
+        el("span", { class: "selbar-n", text: plural(sel.length, "selecionado", "selecionados") }),
+        to,
+        el("div", { class: "selbar-art" }, art, el("button", { class: "btn-ghost btn-sm", type: "button", text: "Definir grupo", disabled: sel.length ? null : "",
+          onclick: async () => { const a = artistName(art.value); if (!a) return art.focus(); await patchMany(sel, { artist: a }, `Grupo ${a} definido em ${plural(sel.length, "card", "cards")}.`); selecting = false; selected.clear(); bFilt.artist = ""; render(); } })),
+        el("button", { class: "icon-btn", type: "button", text: "Cancelar", onclick: () => { selecting = false; selected.clear(); render(); } }));
+    }
+  }
+
   // ---------- render ----------
   function el(tag, attrs = {}, ...kids) {
     const n = document.createElement(tag);
@@ -979,7 +1457,7 @@
     const status = el("div", { class: "status" },
       el("span", { class: "pill ok", text: c.gift ? "Presente · sem custo" : "Pago integralmente" }),
       el("div", { class: "checks" },
-        el("button", { class: "btn-ok", type: "button", text: "Chegou ✓", onclick: () => patch(c, { arrived: true, arrived_at: new Date().toISOString() }, "Chegou! Está em Concluídas.") }),
+        el("button", { class: "btn-ok", type: "button", text: "Chegou ✓", onclick: () => patch(c, { arrived: true, arrived_at: new Date().toISOString() }, "Chegou! Já está no Binder.") }),
         c.gift ? null : el("button", { class: "icon-btn", type: "button", text: "Voltar p/ pagamento", onclick: () => patch(c, undo) })));
     return el("div", { class: rowClass(inGroup) }, thumb(c), infoBlock(c, inGroup), status, deleteControls(c));
   }
@@ -987,6 +1465,7 @@
     const when = c.arrived_at ? new Date(c.arrived_at).toLocaleDateString("pt-BR") : "";
     const status = el("div", { class: "status" },
       el("span", { class: "pill accent", text: when ? "Chegou em " + when : "Chegou" }),
+      c.in_binder === false ? el("button", { class: "icon-btn", type: "button", style: "width:fit-content;padding-left:0", text: "Fora do Binder · pôr de volta", onclick: () => patch(c, { in_binder: true }, "Voltou para o Binder.") }) : null,
       el("button", { class: "icon-btn", type: "button", style: "width:fit-content;padding-left:0", text: "Ainda não chegou", onclick: () => patch(c, { arrived: false, arrived_at: null }) }));
     return el("div", { class: rowClass(inGroup) }, thumb(c), infoBlock(c, inGroup), status, el("div", { class: "actions" }, editButton(c)));
   }
@@ -1016,7 +1495,7 @@
         : el("span", { class: "pill warn" }, document.createTextNode("Falta pagar no pedido "), el("b", { class: "num", text: money(groupDue(g)) })));
       note(`${arrived} de ${plural(m.length, "card chegou", "cards chegaram")}` + (waiting ? ` · ${waiting} ainda em Pagamento` : ""));
       if (here.length > 1) status.append(el("button", { class: "btn-ok", type: "button", style: "width:fit-content", text: `Todos os ${here.length} chegaram ✓`,
-        onclick: () => patchMany(here, { arrived: true, arrived_at: new Date().toISOString() }, `${here.length} cards chegaram! Estão em Concluídas.`) }));
+        onclick: () => patchMany(here, { arrived: true, arrived_at: new Date().toISOString() }, `${here.length} cards chegaram! Já estão no Binder.`) }));
     } else {
       status.append(el("span", { class: "pill accent", text: `${here.length} de ${m.length} chegaram` }));
     }
@@ -1071,6 +1550,7 @@
     $("secInicio").hidden = sec !== "inicio";
     $("secCompras").hidden = sec !== "compras";
     $("secFinanceiro").hidden = sec !== "financeiro";
+    $("secBinder").hidden = sec !== "binder";
     const pend = sm.byStage.pay.length + sm.byStage.arr.length;
     $("nPend").hidden = !pend;
     $("nPend").textContent = pend;
@@ -1092,15 +1572,18 @@
   function renderInicio(sm) {
     const home = $("home");
     if (loading) { home.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Carregando…" }))); return; }
-    if (!sm.list.length && !archived.count) {
+    if (!cards.length && !archived.count) {
       home.replaceChildren(el("div", { class: "box empty welcome" },
         el("div", { class: "cards-deco", "aria-hidden": "true" }, el("span"), el("span"), el("span")),
-        el("strong", { text: "Comece registrando uma compra" }),
-        el("span", { text: "Você acompanha o pagamento e a chegada de cada photocard, e os totais aparecem aqui." }),
-        el("button", { class: "btn-primary", type: "button", text: "+ Registrar compra", onclick: () => openNewBuy() })));
+        el("strong", { text: "Comece pela sua primeira compra ou pelo Binder" }),
+        el("span", { text: "Registre uma compra para acompanhar pagamento e chegada, ou adicione ao Binder os cards que você já tem." }),
+        el("div", { class: "form-btns" },
+          el("button", { class: "btn-primary", type: "button", text: "+ Registrar compra", onclick: () => openNewBuy() }),
+          el("button", { class: "btn-ghost", type: "button", text: "Adicionar ao Binder", onclick: () => openBinderForm(null) }))));
       return;
     }
-    const { pay, arr, col } = sm.byStage;
+    const { pay, arr } = sm.byStage;
+    const bc = binderCards();
     const payDue = sm.dueSum;
     const withDate = arr.filter((c) => c.expected_on).sort((a, b) => a.expected_on.localeCompare(b.expected_on));
     const next = withDate[0];
@@ -1115,10 +1598,10 @@
         el("span", { class: "label", text: "A caminho" }),
         el("span", { class: "value num", text: arr.length }),
         el("span", { class: "sub", text: next ? "próxima prevista para " + fmtDate(next.expected_on) : arr.length ? "sem previsão de chegada" : "nenhum card a caminho" })),
-      el("button", { class: "tile", type: "button", onclick: () => go("compras", "col") },
-        el("span", { class: "label", text: "Já chegaram" }),
-        el("span", { class: "value num", text: col.length }),
-        el("span", { class: "sub", text: plural(new Set(sm.list.filter((c) => c.artist).map((c) => c.artist.toLowerCase())).size, "grupo de K-pop", "grupos de K-pop") })));
+      el("button", { class: "tile tile-binder", type: "button", onclick: () => go("binder") },
+        el("span", { class: "label", text: "No Binder" }),
+        el("span", { class: "value num", text: bc.length }),
+        el("span", { class: "sub", text: plural(new Set(bc.filter((c) => c.artist).map((c) => c.artist.toLowerCase())).size, "grupo", "grupos") + " · " + plural(scopeFolders("binder").length, "pasta", "pastas") })));
 
     // 2) pagamentos pendentes: cards com valor em aberto e pedidos com frete ou taxa em aberto
     const payItems = [
@@ -1136,7 +1619,7 @@
     const recent = [...sm.list].sort((a, b) => buyDate(b).localeCompare(buyDate(a)) || (b.created_at || "").localeCompare(a.created_at || "")).slice(0, 5);
     const STAGE_PILL = { pay: ["warn", "Pagamento"], arr: ["ok", "A caminho"], col: ["accent", "Chegou"] };
     // 5) últimos que chegaram
-    const lastIn = [...col].sort((a, b) => (b.arrived_at || "").localeCompare(a.arrived_at || "")).slice(0, 8);
+    const lastIn = bc.slice(0, 8);
 
     home.replaceChildren(
       tiles,
@@ -1147,16 +1630,16 @@
         box("Próximas chegadas", arr.length ? linkBtn("Ver todas", "compras", "arr") : null,
           arrList.length ? el("div", { class: "minis" }, ...arrList.map((c) => mini(c, c.expected_on ? "previsão: " + fmtDate(c.expected_on) : "sem previsão",
             el("button", { class: "btn-ok btn-sm", type: "button", text: "Chegou ✓", "aria-label": "Chegou: " + c.name,
-              onclick: () => patch(c, { arrived: true, arrived_at: new Date().toISOString() }, "Chegou! Está em Concluídas.") }))))
+              onclick: () => patch(c, { arrived: true, arrived_at: new Date().toISOString() }, "Chegou! Já está no Binder.") }))))
             : el("p", { class: "box-empty", text: "Nenhum card a caminho." })),
         box("Compras recentes", linkBtn("Ver compras", "compras"),
           el("div", { class: "minis" }, ...recent.map((c) => {
             const [k, t] = STAGE_PILL[stage(c)];
             return mini(c, fmtDate(buyDate(c)) + " · " + (c.gift ? "Presente" : money(total(c))), el("span", { class: "pill " + k, text: t }));
           }))),
-        box("Últimos que chegaram", col.length ? linkBtn("Ver concluídas", "compras", "col") : null,
-          lastIn.length ? el("div", { class: "strip" }, ...lastIn.map((c) => el("button", { class: "strip-item", type: "button", "aria-label": c.name, title: c.name, onclick: () => go("compras", "col") }, thumb(c))))
-            : el("p", { class: "box-empty", text: "Quando um card chegar, a foto aparece aqui." }))));
+        box("Últimos no Binder", bc.length ? linkBtn("Abrir o Binder", "binder") : null,
+          lastIn.length ? el("div", { class: "strip" }, ...lastIn.map((c) => el("button", { class: "strip-item", type: "button", "aria-label": c.name, title: c.name, onclick: () => openCard(c) }, thumb(c))))
+            : el("p", { class: "box-empty", text: "Quando uma compra chegar ou você adicionar um card ao Binder, a foto aparece aqui." }))));
   }
 
   // ---------- Compras ----------
@@ -1336,7 +1819,10 @@
     renderNav(sm);
     if (sec === "inicio") renderInicio(sm);
     else if (sec === "compras") renderCompras(sm);
+    else if (sec === "binder") renderBinder();
     else renderFin(sm);
+    if (cdlg.open) refreshCard();
+    setFab(!$("fabMenu").hidden);
   }
 
   setMode("login");

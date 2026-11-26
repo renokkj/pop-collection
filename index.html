@@ -23,7 +23,7 @@
 <meta name="apple-mobile-web-app-title" content="Pop Collection">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -73,7 +73,13 @@
   <!-- navegação: barra lateral no computador, barra inferior no celular -->
   <nav class="sidenav" aria-label="Seções do app">
     <div class="brand"><img src="icons/logo.svg" alt="" width="30" height="30"><span>Pop Collection</span></div>
-    <button class="btn-primary side-add" type="button" id="sideAdd" aria-haspopup="dialog">+ Registrar compra</button>
+    <div class="side-new">
+      <button class="btn-primary side-add" type="button" id="sideAdd" aria-expanded="false" aria-controls="sideMenu">+ Novo</button>
+      <div class="add-menu side-menu" id="sideMenu" hidden>
+        <button type="button" data-add="buy"><b>Registrar uma compra</b><span>Com valores, pagamento e chegada</span></button>
+        <button type="button" data-add="binder"><b>Adicionar ao Binder</b><span>Um card que você já tem</span></button>
+      </div>
+    </div>
     <div class="navlinks">
       <a href="#inicio" data-sec="inicio">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></svg>
@@ -82,6 +88,10 @@
       <a href="#compras" data-sec="compras">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 11.1a1 1 0 0 1-1 .9H7.2a1 1 0 0 1-1-.9z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg>
         <span>Compras</span><b class="badge" id="nPend" hidden></b>
+      </a>
+      <a href="#binder" data-sec="binder">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="9" rx="1.5"/><rect x="13" y="4" width="7" height="9" rx="1.5"/><path d="M4 17h16M4 20h10"/></svg>
+        <span>Binder</span>
       </a>
       <a href="#financeiro" data-sec="financeiro">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>
@@ -134,6 +144,26 @@
       <section class="panel" id="panel"></section>
     </section>
 
+    <!-- Binder: a coleção em grade, com pastas -->
+    <section class="sec" id="secBinder" aria-labelledby="hBinder" hidden>
+      <div class="sec-head">
+        <h1 id="hBinder">Binder</h1>
+        <div class="sec-btns">
+          <button class="btn-ghost" type="button" id="bSelect">Selecionar</button>
+          <button class="btn-primary btn-add" type="button" id="bAdd" aria-haspopup="dialog">+ Adicionar ao Binder</button>
+        </div>
+      </div>
+      <div class="folders" id="bFolders" role="list" aria-label="Pastas"></div>
+      <div class="folder-head" id="bFolderHead" hidden></div>
+      <div class="filters" id="bFilters">
+        <input type="search" id="bName" placeholder="Buscar pelo nome" aria-label="Buscar no Binder pelo nome">
+        <select id="bArtist" aria-label="Filtrar por grupo de K-pop"></select>
+      </div>
+      <div class="notice soft" id="bNoArtist" hidden></div>
+      <div class="pgrid" id="bGrid"></div>
+      <div class="selbar" id="bSelBar" hidden></div>
+    </section>
+
     <!-- Financeiro -->
     <section class="sec" id="secFinanceiro" aria-labelledby="hFin" hidden>
       <h1 id="hFin">Financeiro</h1>
@@ -146,7 +176,8 @@
   <div class="fab" id="fab">
     <div class="fab-menu" id="fabMenu" hidden>
       <button class="btn-ghost fab-item" type="button" id="fabGroups" aria-haspopup="dialog">Pedidos</button>
-      <button class="btn-primary fab-item" type="button" id="fabAdd" aria-haspopup="dialog">Registrar uma compra</button>
+      <button class="btn-ghost fab-item" type="button" data-add="binder">Adicionar ao Binder</button>
+      <button class="btn-primary fab-item" type="button" data-add="buy">Registrar uma compra</button>
     </div>
     <button class="btn-primary fab-main" type="button" id="fabMain" aria-expanded="false" aria-controls="fabMenu" aria-label="Abrir opções de cadastro"><span aria-hidden="true">+</span></button>
   </div>
@@ -200,6 +231,9 @@
             <input type="date" id="fExpected">
           </label>
         </div>
+        <div class="daterow">
+          <div class="f" id="fFolderWrap"></div>
+        </div>
         <div class="entries" id="entries"></div>
         <button class="btn-ghost btn-more" type="button" id="addEntry">+ Adicionar outro photocard</button>
         <fieldset class="gfees" id="fGroupFees" hidden>
@@ -216,6 +250,68 @@
         </div>
         <datalist id="sellerList"></datalist>
         <datalist id="artistList"></datalist>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Binder: cadastro direto (sem valores) -->
+  <dialog class="sheet" id="binderDialog" aria-labelledby="bdTitle">
+    <div class="sheet-box">
+      <div class="sheet-head">
+        <h2 id="bdTitle">Adicionar ao Binder</h2>
+        <button class="icon-btn sheet-close" type="button" id="bdClose" aria-label="Fechar">✕</button>
+      </div>
+      <form class="add" id="bdForm" autocomplete="off" novalidate>
+        <p class="hint" id="bdHint">Para os cards que você já tem. Não pede valores e não entra nos totais.</p>
+        <div class="daterow"><div class="f" id="bdFolderWrap"></div></div>
+        <div class="entries" id="bdEntries"></div>
+        <button class="btn-ghost btn-more" type="button" id="bdMore">+ Adicionar outro photocard</button>
+        <div class="msg-err" id="bdErr" hidden></div>
+        <div class="form-foot">
+          <span class="total-preview" id="bdMsg"></span>
+          <div class="form-btns">
+            <button class="btn-ghost" type="button" id="bdCancel">Cancelar</button>
+            <button class="btn-primary" type="submit" id="bdSubmit">Adicionar ao Binder</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- detalhes de um photocard (Binder) -->
+  <dialog class="sheet sheet-card" id="cardDialog" aria-labelledby="cdTitle">
+    <div class="sheet-box">
+      <div class="sheet-head">
+        <h2 id="cdTitle">Photocard</h2>
+        <button class="icon-btn sheet-close" type="button" id="cdClose" aria-label="Fechar">✕</button>
+      </div>
+      <div class="cd" id="cdBody"></div>
+    </div>
+  </dialog>
+
+  <!-- pasta: nome, capa e exclusão -->
+  <dialog class="sheet sheet-sm" id="folderDialog" aria-labelledby="fdTitle">
+    <div class="sheet-box">
+      <div class="sheet-head">
+        <h2 id="fdTitle">Nova pasta</h2>
+        <button class="icon-btn sheet-close" type="button" id="fdClose" aria-label="Fechar">✕</button>
+      </div>
+      <form class="add" id="fdForm" autocomplete="off">
+        <label class="f">Nome da pasta
+          <input type="text" id="fdName" placeholder="ex.: aespa, Red Velvet" maxlength="60" required>
+        </label>
+        <div class="f" id="fdCoverWrap"><span>Capa</span>
+          <div class="covers" id="fdCovers"></div>
+          <label class="btn-ghost cover-up">Enviar uma imagem<input type="file" id="fdFile" accept="image/*"></label>
+        </div>
+        <div class="confirm" id="fdDelConfirm" hidden></div>
+        <div class="form-foot">
+          <button class="btn-danger" type="button" id="fdDelete" hidden>Excluir pasta</button>
+          <div class="form-btns">
+            <button class="btn-ghost" type="button" id="fdCancel">Cancelar</button>
+            <button class="btn-primary" type="submit" id="fdSubmit">Criar pasta</button>
+          </div>
+        </div>
       </form>
     </div>
   </dialog>
@@ -294,7 +390,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=15"></script>
-<script src="app.js?v=15"></script>
+<script src="config.js?v=16"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
