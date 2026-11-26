@@ -23,7 +23,7 @@
 <meta name="apple-mobile-web-app-title" content="Pop Collection">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -78,6 +78,7 @@
       <div class="add-menu side-menu" id="sideMenu" hidden>
         <button type="button" data-add="buy"><b>Registrar uma compra</b><span>Com valores, pagamento e chegada</span></button>
         <button type="button" data-add="binder"><b>Adicionar ao Binder</b><span>Um card que você já tem</span></button>
+        <button type="button" data-add="wishlist"><b>Adicionar à Wishlist</b><span>Um card que você quer ter</span></button>
       </div>
     </div>
     <div class="navlinks">
@@ -92,6 +93,10 @@
       <a href="#binder" data-sec="binder">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="9" rx="1.5"/><rect x="13" y="4" width="7" height="9" rx="1.5"/><path d="M4 17h16M4 20h10"/></svg>
         <span>Binder</span>
+      </a>
+      <a href="#wishlist" data-sec="wishlist">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>
+        <span>Wishlist</span>
       </a>
       <a href="#financeiro" data-sec="financeiro">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>
@@ -144,7 +149,7 @@
       <section class="panel" id="panel"></section>
     </section>
 
-    <!-- Binder: a coleção em grade, com pastas -->
+    <!-- Binder e Wishlist: a mesma tela em grade, com pastas -->
     <section class="sec" id="secBinder" aria-labelledby="hBinder" hidden>
       <div class="sec-head">
         <h1 id="hBinder">Binder</h1>
@@ -176,6 +181,7 @@
   <div class="fab" id="fab">
     <div class="fab-menu" id="fabMenu" hidden>
       <button class="btn-ghost fab-item" type="button" id="fabGroups" aria-haspopup="dialog">Pedidos</button>
+      <button class="btn-ghost fab-item" type="button" data-add="wishlist">Adicionar à Wishlist</button>
       <button class="btn-ghost fab-item" type="button" data-add="binder">Adicionar ao Binder</button>
       <button class="btn-primary fab-item" type="button" data-add="buy">Registrar uma compra</button>
     </div>
@@ -390,7 +396,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=16"></script>
-<script src="app.js?v=16"></script>
+<script src="config.js?v=17"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>

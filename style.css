@@ -89,7 +89,7 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.15rem; margin
 
 /* Início */
 .home { display: flex; flex-direction: column; gap: 16px; }
-.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; color: var(--fg); font-weight: 500; }
 .tile:hover { border-color: var(--accent); }
 .tile .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
@@ -99,7 +99,8 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.15rem; margin
 .tile.warn .value, .tile.warn .label { color: var(--warn); }
 .tile.info-t { background: var(--ok-soft); border-color: transparent; }
 .tile.info-t .value, .tile.info-t .label { color: var(--ok); }
-@media (max-width: 600px) { .tiles { grid-template-columns: 1fr 1fr; } .tiles .tile:last-child { grid-column: 1 / -1; } .tile .value { font-size: 1.45rem; } }
+@media (max-width: 1100px) { .tiles { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .tile .value { font-size: 1.45rem; } .tile .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; } }
 .home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 @media (max-width: 760px) { .home-grid { grid-template-columns: 1fr; } }
 .box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -481,3 +482,13 @@ dialog.sheet-sm { width: min(520px, calc(100% - 32px)); }
   dialog.sheet.sheet-card, dialog.sheet.sheet-sm { width: 100%; }
   .cd-pic { width: min(48vw, 220px); }
 }
+
+/* Wishlist: "Adquiri este photocard" */
+.tag-wish { background: var(--warn-soft); color: var(--warn); }
+.cd-actions .cd-acq { flex-basis: 100%; }
+.acquire { display: flex; flex-direction: column; gap: 8px; }
+.acquire strong { font-size: 0.95rem; }
+.acq-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--fg); }
+.acq-opt:hover, .acq-opt:focus-visible { border-color: var(--accent); }
+.acq-opt b { font-size: 0.92rem; }
+.acq-opt span { font-size: 0.8rem; color: var(--muted); font-weight: 400; }

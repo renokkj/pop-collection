@@ -27,7 +27,7 @@
   let tab = "pay";
   try { const t = localStorage.getItem("pc-tab"); if (["pay", "arr", "col"].includes(t)) tab = t; } catch (e) {}
   // seção aberta (fica no endereço: #inicio, #compras, #financeiro)
-  const SECS = ["inicio", "compras", "binder", "financeiro"];
+  const SECS = ["inicio", "compras", "binder", "wishlist", "financeiro"];
   let sec = SECS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "inicio";
   // filtros de Compras
   const filt = { q: "", artist: "", seller: "", kind: "" };
@@ -411,10 +411,11 @@
 
   function formLabels() {
     const n = entries.length;
-    $("fSubmit").textContent = editing ? "Salvar alterações" : n > 1 ? `Registrar ${n} photocards` : "Registrar compra";
+    const acq = editing && editing.kind === "wishlist"; // "Adquiri este photocard": vira compra
+    $("fSubmit").textContent = editing && !acq ? "Salvar alterações" : n > 1 ? `Registrar ${n} photocards` : "Registrar compra";
     const aba = $("fGift").checked ? "Chegada" : "Pagamento";
-    $("formMsg").textContent = editing ? "Editando: " + editing.name : n > 1 ? `Os cards entram na aba ${aba}.` : `O card entra na aba ${aba}.`;
-    $("addTitle").textContent = editing ? "Editar compra" : "Registrar compra";
+    $("formMsg").textContent = acq ? `Sai da Wishlist e entra na aba ${aba}.` : editing ? "Editando: " + editing.name : n > 1 ? `Os cards entram na aba ${aba}.` : `O card entra na aba ${aba}.`;
+    $("addTitle").textContent = acq ? "Registrar como compra" : editing ? "Editar compra" : "Registrar compra";
     $("addForm").classList.toggle("editing", !!editing);
   }
 
@@ -456,18 +457,20 @@
     e.name.value = c.name;
     e.seller.value = c.seller || "";
     e.artist.value = c.artist || "";
-    $("fDate").value = c.purchased_on || "";
+    const acq = c.kind === "wishlist";
+    $("fDate").value = acq ? today() : c.purchased_on || "";
     $("fExpected").value = c.expected_on || "";
-    e.price.value = Number(c.price);
+    e.price.value = acq ? "" : Number(c.price);
     e.fees.fill(c);
     setRadio("fType", c.purchase_type || "individual");
     setRadio("fOrigin", c.origin || "nacional");
     $("fGroup").value = grp(c) ? c.group_id : "";
     $("fGift").checked = !!c.gift;
-    fFolder.set(c.folder_id);
+    fFolder.set(acq ? "" : c.folder_id); // pasta da Wishlist não vale no Binder
     const src = c.image_path && photoUrls.get(c.image_path);
     if (src) showPhoto(e, src);
     openForm();
+    if (acq) e.price.focus(); // da Wishlist: só falta o preço
   }
   $("fCancel").addEventListener("click", closeForm);
   function resetForm() {
@@ -533,6 +536,10 @@
         // edição: mantém os pagamentos e a aba do card; a foto só muda se uma nova foi enviada
         const e = entries[0], v = values(e);
         if (e.path) v.image_path = e.path;
+        const acq = target.kind === "wishlist";
+        // saiu da Wishlist: vira compra em Pagamento (ou Chegada, se for presente)
+        if (acq) Object.assign(v, { kind: "compra", arrived: false, arrived_at: null, in_binder: true },
+          gift ? {} : { paid_price: false, paid_shipping: false, paid_shipping_to_gom: false, paid_tax: false });
         const oldPath = target.image_path;
         const wasStage = stage(target);
         const { data, error } = await sb.from("cards").update(v).eq("id", target.id).select().single();
@@ -543,6 +550,7 @@
         const backToPay = wasStage === "arr" && stage(target) === "pay";
         keepPreview(e);
         saving = false; resetForm(); closeForm();
+        if (acq) { toast(`Saiu da Wishlist e virou compra em ${gift ? "Chegada" : "Pagamento"}.`); go("compras", gift ? "arr" : "pay"); return; }
         toast(photoFails ? "Dados salvos, mas a nova foto não foi enviada." : backToPay ? "Alterações salvas. O card voltou para Pagamento." : "Alterações salvas.");
         render();
         return;
@@ -790,21 +798,21 @@
   $("openGroups").addEventListener("click", openGroups);
 
   // ---------- botão flutuante do celular ----------
-  // Em Compras e no Binder o + abre direto o cadastro daquela seção; nas outras, as opções.
+  // Em Compras, no Binder e na Wishlist o + abre direto o cadastro daquela seção; nas outras, as opções.
   function setFab(open) {
     $("fabMenu").hidden = !open; $("fabShade").hidden = !open;
     $("fabMain").setAttribute("aria-expanded", String(open));
-    $("fabMain").setAttribute("aria-label", open ? "Fechar opções" : sec === "compras" ? "Registrar compra" : sec === "binder" ? "Adicionar ao Binder" : "Abrir opções de cadastro");
+    $("fabMain").setAttribute("aria-label", open ? "Fechar opções" : sec === "compras" ? "Registrar compra" : sec === "binder" ? "Adicionar ao Binder" : sec === "wishlist" ? "Adicionar à Wishlist" : "Abrir opções de cadastro");
   }
   function addAction(kind) {
     setFab(false); setSideMenu(false);
-    if (kind === "binder") openBinderForm(null);
+    if (kind === "binder" || kind === "wishlist") openBinderForm(null, kind);
     else openNewBuy();
   }
   $("fabMain").addEventListener("click", () => {
     if (!$("fabMenu").hidden) return setFab(false);
     if (sec === "compras") return addAction("buy");
-    if (sec === "binder") return addAction("binder");
+    if (sec === "binder" || sec === "wishlist") return addAction(sec);
     setFab(true);
   });
   document.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => addAction(b.dataset.add)));
@@ -896,6 +904,15 @@
   const binderCards = () => cards.filter(inBinder).sort((a, b) => addedAt(b).localeCompare(addedAt(a)));
   const folderById = (id) => folders.find((f) => f.id === id) || null;
   const scopeFolders = (scope) => folders.filter((f) => f.scope === scope);
+  // Wishlist: os cards que a pessoa quer ter, mais recentes primeiro
+  const isWish = (c) => c.kind === "wishlist";
+  const wishCards = () => cards.filter(isWish).sort((a, b) => (b.wished_at || b.created_at || "").localeCompare(a.wished_at || a.created_at || ""));
+  // a mesma tela (grade, pastas, seleção) serve ao Binder e à Wishlist
+  const curScope = () => (sec === "wishlist" ? "wishlist" : "binder");
+  const scopeCards = (scope) => (scope === "wishlist" ? wishCards() : binderCards());
+  const SCOPE_NAME = { binder: "Binder", wishlist: "Wishlist" };
+  const bFolderBy = { binder: "all", wishlist: "all" };
+  let bScope = "binder";
   let bFolder = "all"; // "all", "none" ou o id da pasta aberta
   const bFilt = { q: "", artist: "" };
   let selecting = false;
@@ -911,6 +928,7 @@
 
   // campo "Pasta" com "+ Nova pasta" que cria a pasta sem sair do formulário
   function folderPicker(wrap, scope, label) {
+    // o escopo pode mudar depois (o mesmo cadastro serve ao Binder e à Wishlist)
     const sel = el("select", {});
     const name = el("input", { type: "text", placeholder: "Nome da nova pasta", maxlength: "60", "aria-label": "Nome da nova pasta", hidden: "" });
     wrap.replaceChildren(el("label", { class: "f" }, label, sel), name);
@@ -919,7 +937,7 @@
       refresh(keep) {
         const cur = keep !== undefined ? keep : sel.value;
         sel.replaceChildren(el("option", { value: "", text: "Sem pasta" }), el("option", { value: "new", text: "+ Nova pasta" }),
-          ...scopeFolders(scope).map((f) => el("option", { value: f.id, text: f.name })));
+          ...scopeFolders(p.scope).map((f) => el("option", { value: f.id, text: f.name })));
         sel.value = cur === "new" || folderById(cur) ? cur : "";
         name.hidden = sel.value !== "new";
       },
@@ -929,12 +947,12 @@
         if (sel.value !== "new") return sel.value || null;
         const n = name.value.trim();
         if (!n) return null;
-        const f = await createFolder(n, scope);
+        const f = await createFolder(n, p.scope);
         p.refresh(f.id);
         return f.id;
       },
       needsName: () => sel.value === "new" && !name.value.trim(),
-      name,
+      name, scope,
     };
     sel.addEventListener("change", () => { name.hidden = sel.value !== "new"; if (!name.hidden) name.focus(); });
     p.refresh("");
@@ -945,7 +963,7 @@
   // ---------- cadastro direto no Binder ----------
   const bdlg = $("binderDialog");
   const bdFolder = folderPicker($("bdFolderWrap"), "binder", "Pasta (opcional)");
-  let bdEntries = [], bdEditing = null, bdSaving = false, bdLast = null;
+  let bdEntries = [], bdEditing = null, bdSaving = false, bdLast = null, bdScope = "binder";
   function makeBEntry() {
     const e = { photoBlob: null, previewUrl: null, path: null };
     e.name = el("input", { type: "text", placeholder: "ex.: Karina · Armageddon POB", maxlength: "120" });
@@ -981,19 +999,24 @@
     const n = bdEntries.length;
     bdEntries.forEach((e, i) => { e.num.textContent = "Photocard " + (i + 1); e.head.hidden = n === 1; });
     $("bdMore").hidden = !!bdEditing;
-    $("bdTitle").textContent = bdEditing ? "Editar photocard" : "Adicionar ao Binder";
-    $("bdSubmit").textContent = bdEditing ? "Salvar alterações" : n > 1 ? `Adicionar ${n} photocards` : "Adicionar ao Binder";
+    const to = bdScope === "wishlist" ? "à Wishlist" : "ao Binder";
+    $("bdTitle").textContent = bdEditing ? "Editar photocard" : "Adicionar " + to;
+    $("bdSubmit").textContent = bdEditing ? "Salvar alterações" : n > 1 ? `Adicionar ${n} photocards` : "Adicionar " + to;
+    $("bdHint").textContent = bdScope === "wishlist" ? "Os cards que você quer ter. Quando conseguir um, abra o card e toque em \"Adquiri este photocard\"." : "Para os cards que você já tem. Não pede valores e não entra nos totais.";
     $("bdMsg").textContent = bdEditing ? "" : n > 1 ? `${n} cards` : "";
   }
   function bdReset() {
     bdEntries.forEach((e) => { if (e.previewUrl) URL.revokeObjectURL(e.previewUrl); });
     bdEntries = []; bdEditing = null; bdLast = null;
     $("bdEntries").replaceChildren(); $("bdErr").hidden = true;
-    bdFolder.set(bFolder !== "all" && bFolder !== "none" ? bFolder : "");
+    bdFolder.scope = bdScope;
+    const here = sec === bdScope && bFolder !== "all" && bFolder !== "none" ? bFolder : "";
+    bdFolder.set(here);
     bdAdd(false);
   }
-  function openBinderForm(c) {
+  function openBinderForm(c, scope) {
     if (bdSaving) return;
+    bdScope = c ? (isWish(c) ? "wishlist" : "binder") : scope || curScope();
     bdReset();
     if (c) {
       bdEditing = c;
@@ -1021,7 +1044,7 @@
   $("bdClose").addEventListener("click", closeBinderForm);
   $("bdCancel").addEventListener("click", closeBinderForm);
   $("bdMore").addEventListener("click", () => bdAdd(true));
-  $("bAdd").addEventListener("click", () => openBinderForm(null));
+  $("bAdd").addEventListener("click", () => openBinderForm(null, curScope()));
   function bdError(msg, focus) {
     $("bdErr").textContent = msg; $("bdErr").hidden = false;
     if (focus) focus.focus();
@@ -1060,17 +1083,19 @@
         toast("Alterações salvas.");
       } else {
         const now = new Date().toISOString();
-        const rows = bdEntries.map((e) => ({ kind: "binder", name: e.name.value.trim(), artist: artistName(e.artist.value), image_path: e.path, folder_id,
-          arrived: true, arrived_at: now, purchased_on: null }));
+        const wish = bdScope === "wishlist";
+        const rows = bdEntries.map((e) => ({ kind: bdScope, name: e.name.value.trim(), artist: artistName(e.artist.value), image_path: e.path, folder_id, purchased_on: null,
+          ...(wish ? { arrived: false, arrived_at: null, wished_at: now } : { arrived: true, arrived_at: now }) }));
         const { data, error } = await sb.from("cards").insert(rows).select();
         if (error) throw error;
         bdEntries.forEach(keep);
         cards.unshift(...data);
         const f = folderById(folder_id);
-        toast((data.length > 1 ? `${data.length} cards adicionados ao Binder` : "Card adicionado ao Binder") + (f ? ` · pasta ${f.name}.` : "."));
+        const to = wish ? "à Wishlist" : "ao Binder";
+        toast((data.length > 1 ? `${data.length} cards adicionados ${to}` : "Card adicionado " + to) + (f ? ` · pasta ${f.name}.` : "."));
       }
       bdSaving = false; closeBinderForm();
-      if (sec !== "binder") go("binder"); else render();
+      if (sec !== bdScope) go(bdScope); else render();
     } catch (err) {
       if (uploaded.length) sb.storage.from(BUCKET).remove(uploaded);
       bdError("Não foi possível salvar. Confira a conexão e tente de novo.");
@@ -1096,7 +1121,7 @@
     if (!fdlg.open) fdlg.showModal();
     $("fdName").focus();
   }
-  function folderCards(f) { return cards.filter((c) => c.folder_id === f.id && (f.scope === "binder" ? inBinder(c) : true)); }
+  function folderCards(f) { return cards.filter((c) => c.folder_id === f.id && (f.scope === "wishlist" ? isWish(c) : inBinder(c))); }
   function renderCovers() {
     const f = fdEditing;
     const list = f ? folderCards(f).filter((c) => c.image_path && photoUrls.get(c.image_path)).slice(0, 18) : [];
@@ -1156,7 +1181,7 @@
     const f = fdEditing; if (!f) return;
     const n = folderCards(f).length;
     $("fdDelConfirm").replaceChildren(
-      el("span", { text: `Excluir a pasta "${f.name}"? ${n ? `${plural(n, "O card continua", `Os ${n} cards continuam`)} no Binder, só ${n === 1 ? "fica" : "ficam"} sem pasta.` : "Ela está vazia."}` }),
+      el("span", { text: `Excluir a pasta "${f.name}"? ${n ? `${plural(n, "O card continua", `Os ${n} cards continuam`)} ${f.scope === "wishlist" ? "na Wishlist" : "no Binder"}, só ${n === 1 ? "fica" : "ficam"} sem pasta.` : "Ela está vazia."}` }),
       el("button", { class: "btn-danger strong", type: "button", text: "Sim, excluir pasta", onclick: () => deleteFolder(f) }),
       el("button", { class: "btn-ghost", type: "button", text: "Cancelar", onclick: () => ($("fdDelConfirm").hidden = true) }));
     $("fdDelConfirm").hidden = false;
@@ -1171,20 +1196,24 @@
     folders = folders.filter((x) => x.id !== f.id);
     if (bFolder === f.id) bFolder = "all";
     closeFolder();
-    toast("Pasta excluída. Os cards continuam no Binder.");
+    toast(`Pasta excluída. Os cards continuam ${f.scope === "wishlist" ? "na Wishlist" : "no Binder"}.`);
     render();
   }
 
   // ---------- detalhes de um photocard ----------
   const cdlg = $("cardDialog");
-  let cdId = null, cdConfirm = false;
-  function openCard(c) { cdId = c.id; cdConfirm = false; refreshCard(); if (!cdlg.open) cdlg.showModal(); }
+  let cdId = null, cdConfirm = false, cdAcquire = false;
+  function openCard(c) { cdId = c.id; cdConfirm = false; cdAcquire = false; refreshCard(); if (!cdlg.open) cdlg.showModal(); }
   function closeCard() { if (cdlg.open) cdlg.close(); }
   cdlg.addEventListener("close", () => { cdId = null; });
   cdlg.addEventListener("click", (e) => { if (e.target === cdlg) closeCard(); });
   $("cdClose").addEventListener("click", closeCard);
   async function moveCards(list, folderId, msg) {
     await patchMany(list, { folder_id: folderId }, msg);
+  }
+  // da Wishlist direto para o Binder, sem valores (a pasta da Wishlist não vale lá)
+  function toBinder(c) {
+    patch(c, { kind: "binder", arrived: true, arrived_at: new Date().toISOString(), folder_id: null }, "Foi para o Binder!");
   }
   function refreshCard() {
     const c = cards.find((x) => x.id === cdId);
@@ -1208,32 +1237,42 @@
         row("Pagamento", "Pago integralmente");
       }
       row("Chegada", c.arrived_at ? "Chegou em " + new Date(c.arrived_at).toLocaleDateString("pt-BR") : "Chegou");
-    } else {
-      row("No Binder desde", c.created_at ? new Date(c.created_at).toLocaleDateString("pt-BR") : null);
+    } else if (!isWish(c)) {
+      row("No Binder desde", (c.arrived_at || c.created_at) ? new Date(c.arrived_at || c.created_at).toLocaleDateString("pt-BR") : null);
     }
-    if (c.wished_at) row("Na Wishlist desde", new Date(c.wished_at).toLocaleDateString("pt-BR"));
+    if (c.wished_at) row(isWish(c) ? "Na Wishlist desde" : "Esteve na Wishlist desde", new Date(c.wished_at).toLocaleDateString("pt-BR"));
 
     const move = el("select", { "aria-label": "Mover para a pasta" },
-      el("option", { value: "", text: "Sem pasta" }), ...scopeFolders("binder").map((x) => el("option", { value: x.id, text: x.name })));
+      el("option", { value: "", text: "Sem pasta" }), ...scopeFolders(isWish(c) ? "wishlist" : "binder").map((x) => el("option", { value: x.id, text: x.name })));
     move.value = c.folder_id || "";
     move.addEventListener("change", () => { const to = folderById(move.value); moveCards([c], move.value || null, to ? `Movido para a pasta ${to.name}.` : "Card sem pasta agora."); });
 
     let actions;
-    if (cdConfirm) {
+    if (cdAcquire) {
+      // "Adquiri este photocard": vira compra (com valores) ou vai direto pro Binder
+      actions = el("div", { class: "acquire" },
+        el("strong", { text: "Como você conseguiu este card?" }),
+        el("button", { class: "acq-opt", type: "button", onclick: () => { closeCard(); startEdit(c); } },
+          el("b", { text: "Comprei: registrar como compra" }), el("span", { text: "Abre o cadastro de compra com a foto, o nome e o grupo já preenchidos. Ele entra em Pagamento." })),
+        el("button", { class: "acq-opt", type: "button", onclick: () => { closeCard(); toBinder(c); } },
+          el("b", { text: "Já está comigo: mover para o Binder" }), el("span", { text: "Sem valores, vai direto para o Binder." })),
+        el("button", { class: "btn-ghost", type: "button", text: "Cancelar", onclick: () => { cdAcquire = false; refreshCard(); } }));
+    } else if (cdConfirm) {
       actions = el("div", { class: "confirm cd-confirm" },
-        el("span", { text: isBuy(c) ? "Este card veio de uma compra. Tirar só do Binder mantém a compra e os valores em Compras › Concluídas." : `Excluir "${c.name}" do Binder? A foto também é apagada.` }),
+        el("span", { text: isBuy(c) ? "Este card veio de uma compra. Tirar só do Binder mantém a compra e os valores em Compras › Concluídas." : `Excluir "${c.name}" ${isWish(c) ? "da Wishlist" : "do Binder"}? A foto também é apagada.` }),
         isBuy(c) ? el("button", { class: "btn-ghost", type: "button", text: "Tirar só do Binder", onclick: () => { closeCard(); patch(c, { in_binder: false }, "Tirado do Binder. A compra continua em Concluídas."); } }) : null,
         el("button", { class: "btn-danger strong", type: "button", text: isBuy(c) ? "Excluir card e compra" : "Sim, excluir", onclick: () => { closeCard(); removeCard(c); } }),
         el("button", { class: "btn-ghost", type: "button", text: "Cancelar", onclick: () => { cdConfirm = false; refreshCard(); } }));
     } else {
       actions = el("div", { class: "cd-actions" },
+        isWish(c) ? el("button", { class: "btn-primary cd-acq", type: "button", text: "Adquiri este photocard", onclick: () => { cdAcquire = true; refreshCard(); const q = $("cdBody").querySelector(".acquire"); if (q) q.scrollIntoView({ block: "nearest", behavior: "smooth" }); } }) : null,
         el("button", { class: "btn-ghost", type: "button", text: "Editar", onclick: () => { closeCard(); isBuy(c) ? startEdit(c) : openBinderForm(c); } }),
         el("button", { class: "btn-danger", type: "button", text: "Excluir", onclick: () => { cdConfirm = true; refreshCard(); } }));
     }
     $("cdTitle").textContent = c.name;
     $("cdBody").replaceChildren(pic,
       el("div", { class: "cd-info" },
-        el("span", { class: "tag", text: isBuy(c) ? (c.gift ? "Presente" : "Compra") : "Cadastrado no Binder" }),
+        el("span", { class: "tag" + (isWish(c) ? " tag-wish" : ""), text: isBuy(c) ? (c.gift ? "Presente" : "Compra") : isWish(c) ? "Na Wishlist" : "Cadastrado no Binder" }),
         el("label", { class: "f" }, "Pasta", move),
         rows.length ? el("dl", { class: "cd-list" }, ...rows) : null,
         actions));
@@ -1257,8 +1296,18 @@
   $("bSelect").addEventListener("click", () => { selecting = !selecting; selected.clear(); render(); });
 
   function renderBinder() {
-    const all = binderCards();
-    const bf = scopeFolders("binder");
+    const scope = curScope(), wish = scope === "wishlist", NAME = SCOPE_NAME[scope];
+    // trocar entre Binder e Wishlist guarda a pasta aberta de cada um e zera busca e seleção
+    if (scope !== bScope) {
+      bFolderBy[bScope] = bFolder; bFolder = bFolderBy[scope]; bScope = scope;
+      selecting = false; selected.clear(); bFilt.q = ""; bFilt.artist = ""; $("bName").value = ""; $("bArtist").value = "";
+    }
+    $("hBinder").textContent = NAME;
+    $("bAdd").textContent = wish ? "+ Adicionar à Wishlist" : "+ Adicionar ao Binder";
+    $("bName").setAttribute("aria-label", `Buscar na ${wish ? "Wishlist" : "coleção"} pelo nome`);
+    $("secBinder").classList.toggle("is-wish", wish);
+    const all = scopeCards(scope);
+    const bf = scopeFolders(scope);
     if (bFolder !== "all" && bFolder !== "none" && !folderById(bFolder)) bFolder = "all";
     // pastas
     const none = all.filter((c) => !c.folder_id || !folderById(c.folder_id));
@@ -1267,7 +1316,7 @@
       folderTile("all", "Todos", all.length, firstPic(all)),
       ...bf.map((f) => { const l = all.filter((c) => c.folder_id === f.id); return folderTile(f.id, f.name, l.length, coverOf(f, l)); }),
       ...(bf.length && none.length ? [folderTile("none", "Sem pasta", none.length, firstPic(none))] : []),
-      el("button", { class: "folder folder-new", type: "button", onclick: () => openFolder(null, "binder") },
+      el("button", { class: "folder folder-new", type: "button", onclick: () => openFolder(null, scope) },
         el("span", { class: "folder-cover empty" }, el("span", { text: "+" })), el("span", { class: "folder-name", text: "Nova pasta" })));
     const open = folderById(bFolder);
     $("bFolderHead").hidden = !open;
@@ -1294,7 +1343,13 @@
       && (!bFilt.artist || (bFilt.artist === "-" ? !c.artist : (c.artist || "").toLowerCase() === bFilt.artist)));
 
     const grid = $("bGrid");
-    if (loading) grid.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Carregando seu Binder…" })));
+    if (loading) grid.replaceChildren(el("div", { class: "empty" }, el("strong", { text: `Carregando ${wish ? "sua Wishlist" : "seu Binder"}…` })));
+    else if (!all.length && wish) grid.replaceChildren(el("div", { class: "empty binder-empty" },
+      el("div", { class: "cards-deco", "aria-hidden": "true" }, el("span"), el("span"), el("span")),
+      el("strong", { text: "Sua Wishlist está vazia" }),
+      el("span", { text: "Guarde aqui os cards que você quer ter. Quando conseguir um, ele vira compra ou vai direto para o Binder." }),
+      el("div", { class: "form-btns" },
+        el("button", { class: "btn-primary", type: "button", text: "+ Adicionar à Wishlist", onclick: () => openBinderForm(null, "wishlist") }))));
     else if (!all.length) grid.replaceChildren(el("div", { class: "empty binder-empty" },
       el("div", { class: "cards-deco", "aria-hidden": "true" }, el("span"), el("span"), el("span")),
       el("strong", { text: "Seu Binder está vazio" }),
@@ -1327,7 +1382,7 @@
         if (id === "new") {
           const name = (prompt("Nome da nova pasta") || "").trim();
           if (!name) { to.value = ""; return; }
-          try { id = (await createFolder(name, "binder")).id; } catch (e) { toast("Não foi possível criar a pasta."); return; }
+          try { id = (await createFolder(name, scope)).id; } catch (e) { toast("Não foi possível criar a pasta."); return; }
         }
         const f = folderById(id);
         await moveCards(sel, f ? f.id : null, `${plural(sel.length, "card movido", "cards movidos")} ${f ? "para " + f.name : "para Sem pasta"}.`);
@@ -1550,7 +1605,7 @@
     $("secInicio").hidden = sec !== "inicio";
     $("secCompras").hidden = sec !== "compras";
     $("secFinanceiro").hidden = sec !== "financeiro";
-    $("secBinder").hidden = sec !== "binder";
+    $("secBinder").hidden = sec !== "binder" && sec !== "wishlist";
     const pend = sm.byStage.pay.length + sm.byStage.arr.length;
     $("nPend").hidden = !pend;
     $("nPend").textContent = pend;
@@ -1584,6 +1639,7 @@
     }
     const { pay, arr } = sm.byStage;
     const bc = binderCards();
+    const wc = wishCards();
     const payDue = sm.dueSum;
     const withDate = arr.filter((c) => c.expected_on).sort((a, b) => a.expected_on.localeCompare(b.expected_on));
     const next = withDate[0];
@@ -1601,7 +1657,11 @@
       el("button", { class: "tile tile-binder", type: "button", onclick: () => go("binder") },
         el("span", { class: "label", text: "No Binder" }),
         el("span", { class: "value num", text: bc.length }),
-        el("span", { class: "sub", text: plural(new Set(bc.filter((c) => c.artist).map((c) => c.artist.toLowerCase())).size, "grupo", "grupos") + " · " + plural(scopeFolders("binder").length, "pasta", "pastas") })));
+        el("span", { class: "sub", text: plural(new Set(bc.filter((c) => c.artist).map((c) => c.artist.toLowerCase())).size, "grupo", "grupos") + " · " + plural(scopeFolders("binder").length, "pasta", "pastas") })),
+      el("button", { class: "tile tile-wish", type: "button", onclick: () => go("wishlist") },
+        el("span", { class: "label", text: "Na Wishlist" }),
+        el("span", { class: "value num", text: wc.length }),
+        el("span", { class: "sub", text: wc.length ? "último: " + wc[0].name : "nenhum card desejado" })));
 
     // 2) pagamentos pendentes: cards com valor em aberto e pedidos com frete ou taxa em aberto
     const payItems = [
@@ -1819,7 +1879,7 @@
     renderNav(sm);
     if (sec === "inicio") renderInicio(sm);
     else if (sec === "compras") renderCompras(sm);
-    else if (sec === "binder") renderBinder();
+    else if (sec === "binder" || sec === "wishlist") renderBinder();
     else renderFin(sm);
     if (cdlg.open) refreshCard();
     setFab(!$("fabMenu").hidden);
