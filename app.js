@@ -1797,19 +1797,64 @@
   }
 
   // ---------- Financeiro ----------
-  function bars(rows, note) {
-    if (!rows.length) return el("p", { class: "box-empty", text: "Nada para mostrar ainda." });
+  // barras horizontais; fmt muda o número da direita (dinheiro por padrão)
+  function bars(rows, note, fmt = money, empty = "Nada para mostrar ainda.") {
+    if (!rows.length) return el("p", { class: "box-empty", text: empty });
     const max = Math.max(...rows.map((r) => r[1])) || 1;
-    return el("div", { class: "bars" }, ...rows.map(([label, v, sub]) => el("div", { class: "bar-row" },
+    return el("div", { class: "bars" }, ...rows.map(([label, v, sub]) => el("div", { class: "bar-row", title: `${label}: ${fmt(v)}${sub ? " · " + sub : ""}` },
       el("span", { class: "bar-label" }, document.createTextNode(label), sub ? el("small", { text: sub }) : null),
       el("span", { class: "bar-track", "aria-hidden": "true" }, el("span", { class: "bar-fill", style: `width:${Math.max(2, (v / max) * 100).toFixed(1)}%` })),
-      el("span", { class: "bar-val num", text: money(v) }))),
+      el("span", { class: "bar-val num", text: fmt(v) }))),
       note ? el("p", { class: "hint", text: note }) : null);
+  }
+  const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  // colunas dos últimos 12 meses (meses sem compra aparecem zerados); o valor aparece no maior e no mês atual,
+  // os outros ao passar o dedo ou o mouse
+  function monthColumns(months) {
+    const now = new Date();
+    const keys = [];
+    for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }
+    const vals = keys.map((k) => months.get(k) || 0);
+    if (!vals.some((v) => v > 0)) return el("p", { class: "box-empty", text: "Nenhuma compra nos últimos 12 meses." });
+    const max = Math.max(...vals);
+    const iMax = vals.indexOf(max), iNow = keys.length - 1;
+    const sel = el("p", { class: "cols-sel", "aria-live": "polite" });
+    const show = (i) => { sel.textContent = `${MES[Number(keys[i].slice(5, 7)) - 1]} ${keys[i].slice(0, 4)}: ${money(vals[i])}`; };
+    const cols = el("div", { class: "cols", role: "list" }, ...keys.map((k, i) => {
+      const lab = `${MES[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}: ${money(vals[i])}`;
+      return el("button", { class: "col" + (i === iNow ? " now" : ""), type: "button", role: "listitem", title: lab, "aria-label": lab,
+        onmouseenter: () => show(i), onfocus: () => show(i), onclick: () => show(i) },
+        el("span", { class: "col-val num", text: (i === iMax || i === iNow) && vals[i] > 0 ? moneyShort(vals[i]) : "" }),
+        el("span", { class: "col-bar", style: `height:${vals[i] > 0 ? Math.max(3, (vals[i] / max) * 100).toFixed(1) : 0}%` }),
+        el("span", { class: "col-lab" }, MES[Number(k.slice(5, 7)) - 1], k.endsWith("-01") || i === 0 ? el("small", { class: "col-y", text: " " + k.slice(2, 4) }) : null));
+    }));
+    show(iNow);
+    return el("div", {}, cols, sel);
+  }
+  const moneyShort = (v) => (v >= 1000 ? "R$ " + (v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " mil" : "R$ " + Math.round(v).toLocaleString("pt-BR"));
+  // de onde vem o dinheiro: uma barra dividida em photocards, fretes e taxas
+  function splitBar(parts) {
+    const tot = parts.reduce((s, p) => s + p[1], 0);
+    if (tot <= 0) return null;
+    const pct = (v) => Math.round((v / tot) * 100) + "%";
+    return el("section", { class: "box split" },
+      el("div", { class: "box-head" }, el("h2", { text: "Para onde vai o dinheiro" })),
+      el("div", { class: "split-bar", role: "img", "aria-label": parts.map(([l, v]) => `${l} ${pct(v)}`).join(", ") },
+        ...parts.filter((p) => p[1] > 0).map(([l, v], i) => el("span", { class: "sp sp-" + parts.findIndex((x) => x[0] === l), style: `flex-grow:${v}`, title: `${l}: ${money(v)} (${pct(v)})` }))),
+      el("div", { class: "split-legend" }, ...parts.map(([l, v], i) => el("span", { class: "leg" },
+        el("i", { class: "sp-" + i, "aria-hidden": "true" }), el("b", { text: l }), el("span", { class: "num", text: `${money(v)} · ${pct(v)}` })))));
   }
   function sumBy(list, keyFn) {
     const m = new Map();
     list.forEach((c) => { const k = keyFn(c); const cur = m.get(k) || [k, 0, 0]; cur[1] = cents(cur[1] + total(c)); cur[2]++; m.set(k, cur); });
     return [...m.values()].filter((r) => r[1] > 0).sort((a, b) => b[1] - a[1]).map(([k, v, n]) => [k, v, plural(n, "card", "cards")]);
+  }
+  const cardsN = (n) => plural(n, "card", "cards");
+  // quantos cards por grupo de K-pop (Binder e Wishlist não têm valores)
+  function countBy(list) {
+    const m = new Map();
+    list.forEach((c) => { const k = c.artist || "Sem grupo de K-pop"; const key = k.toLowerCase(); const cur = m.get(key) || [k, 0]; cur[1]++; m.set(key, cur); });
+    return [...m.values()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 10);
   }
   function renderFin(sm) {
     const fin = $("fin");
@@ -1838,7 +1883,6 @@
     const addMonth = (iso, v) => { const k = (iso || "").slice(0, 7); if (!k) return; months.set(k, cents((months.get(k) || 0) + v)); };
     list.forEach((c) => addMonth(buyDate(c), total(c)));
     groups.forEach((g) => addMonth((g.created_at || "").slice(0, 10), fees(g)));
-    const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
     const monthRows = [...months.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12)
       .map(([k, v]) => [`${MES[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`, v]);
     const feeNote = groupFees > 0 ? `Fretes e taxas de pedidos (${money(groupFees)}) não entram aqui, porque valem para vários cards.` : null;
@@ -1851,11 +1895,16 @@
         kpi("Em photocards", cents(price), "preço dos cards"),
         kpi("Em fretes", cents(ship), "até a GOM e até você"),
         kpi("Em taxas", cents(tax), "taxa de importação")),
+      splitBar([["Photocards", cents(price)], ["Fretes", cents(ship)], ["Taxas", cents(tax)]]),
+      box("Gasto nos últimos 12 meses", null, monthColumns(months),
+        el("p", { class: "hint", text: "Pela data da compra. Fretes de pedido entram no mês em que o pedido foi criado." })),
       el("div", { class: "home-grid" },
-        box("Por mês", null, bars(monthRows, "Pela data da compra. Fretes de pedido entram no mês em que o pedido foi criado.")),
+        box("Por mês", null, bars(monthRows, null)),
         box("Por categoria", null, bars(catRows, gifts ? plural(gifts, "presente sem custo", "presentes sem custo") + " fora da conta." : null)),
         box("Por grupo de K-pop", null, bars(sumBy(list, (c) => c.artist || "Sem grupo de K-pop"), feeNote)),
-        box("Por vendedor", null, bars(sumBy(list, (c) => c.seller || "Sem vendedor"), feeNote))),
+        box("Por vendedor", null, bars(sumBy(list, (c) => c.seller || "Sem vendedor"), feeNote)),
+        box("Coleção por grupo", linkBtn("Abrir o Binder", "binder"), bars(countBy(binderCards()), null, cardsN, "O Binder ainda está vazio.")),
+        box("Wishlist por grupo", linkBtn("Abrir a Wishlist", "wishlist"), bars(countBy(wishCards()), null, cardsN, "A Wishlist está vazia."))),
       sm.dueSum > 0 ? el("div", { class: "fin-foot" },
         el("span", { text: `Falta pagar ${money(sm.dueSum)}.` }),
         el("button", { class: "btn-primary", type: "button", text: "Ver pagamentos pendentes", onclick: () => go("compras", "pay") })) : null);

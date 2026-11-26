@@ -144,6 +144,29 @@ h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.15rem; margin
 .bar-track { height: 10px; background: var(--sunken); border-radius: 99px; overflow: hidden; }
 .bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
 .bar-val { font-size: 0.84rem; text-align: right; }
+/* gasto por mês em colunas */
+.cols { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; height: 190px; padding-top: 4px; }
+.col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; padding: 0; background: none; border: none; color: var(--muted); min-width: 0; border-radius: 6px; }
+.col:hover .col-bar, .col:focus-visible .col-bar { background: var(--accent); }
+.col:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.col-bar { width: 100%; max-width: 38px; background: color-mix(in srgb, var(--accent) 55%, var(--surface)); border-radius: 4px 4px 0 0; }
+.col.now .col-bar { background: var(--accent); }
+.col-val { font-size: 0.68rem; color: var(--fg); white-space: nowrap; min-height: 1em; }
+.col-lab { font-size: 0.68rem; white-space: nowrap; border-top: 1px solid var(--line); width: 100%; text-align: center; padding-top: 4px; }
+.col.now .col-lab { color: var(--accent); font-weight: 700; }
+.cols-sel { margin: 8px 0 0; font-size: 0.86rem; font-weight: 600; }
+.col-y { font-size: inherit; }
+@media (max-width: 600px) { .cols { gap: 3px; height: 160px; } .col-val { font-size: 0.6rem; } .col-lab { font-size: 0.6rem; } .col-y { display: none; } }
+/* de onde vem o dinheiro */
+.split-bar { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; }
+.split-bar .sp { min-width: 4px; }
+.sp-0 { background: var(--accent); }
+.sp-1 { background: color-mix(in srgb, var(--accent) 55%, var(--surface)); }
+.sp-2 { background: color-mix(in srgb, var(--accent) 25%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, var(--surface)); }
+.split-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 0.84rem; }
+.leg { display: inline-flex; align-items: center; gap: 6px; }
+.leg i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.leg .num { color: var(--muted); }
 .fin-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 12px 14px; font-weight: 600; }
 
 /* Compras: busca e filtros */

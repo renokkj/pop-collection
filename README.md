@@ -4,7 +4,7 @@
 
 # Pop Collection
 
-Controle os pagamentos, a chegada e a coleção dos seus photocards.
+Controle as compras, os pagamentos, a chegada, a coleção e a wishlist dos seus photocards.
 
 [![Abrir o app](https://img.shields.io/badge/abrir_o_app-5b3fd6?style=for-the-badge)](https://renokkj.github.io/pop-collection/)
 
@@ -25,54 +25,78 @@ Controle os pagamentos, a chegada e a coleção dos seus photocards.
 
 ## Sobre o projeto
 
-Criei o Pop Collection para resolver um problema meu: acompanhar quanto já paguei, o que falta pagar e quais photocards ainda estão a caminho. Foi o primeiro projeto que idealizei do zero, da ideia ao app publicado.
+Criei o Pop Collection para resolver um problema meu: acompanhar quanto já paguei, o que falta pagar e quais photocards ainda estão a caminho. Depois ele virou também o lugar da minha coleção (o Binder) e dos cards que eu quero ter (a Wishlist). Foi o primeiro projeto que idealizei do zero, da ideia ao app publicado.
 
 ## O que o app faz
 
+O app tem cinco seções: **Início**, **Compras**, **Binder**, **Wishlist** e **Financeiro**. No computador elas ficam na barra lateral; no celular, na barra de baixo.
+
+### Compras
+
+- **Registrar compra:** foto, nome, grupo de K-pop, vendedor, categoria, preço, fretes, data da compra e previsão de chegada. O total é calculado sozinho. Dá para registrar vários cards de uma vez com "+ Adicionar outro photocard".
+- **Colar a foto:** no computador, copie uma imagem e aperte Ctrl+V (Cmd+V no Mac) no cadastro.
+- **Categorias:** Individual ou CEG, Nacional ou Internacional. O formulário mostra só os fretes e a taxa de importação de cada categoria. Na CEG, você informa só a sua parte do que é dividido.
+- **Presente:** um card que você ganhou não tem custo e vai direto para a Chegada.
+- **Pedidos:** junte cards da mesma compra num pedido. Os fretes e a taxa ficam no pedido e contam uma vez só.
+- **Três abas:** Pagamento (marque cada valor pago), Chegada (com tudo pago, aguarde e toque em "Chegou ✓") e Concluídas.
+- **Busca e filtros** por nome, grupo de K-pop, vendedor e categoria.
+
+### Binder
+
+- **A coleção em grade, só com as fotos.** Toda compra que chega entra no Binder sozinha.
+- **Adicionar ao Binder:** para os cards que você já tem, com foto, nome e grupo, sem valores.
+- **Pastas** com nome e capa. Excluir uma pasta não apaga os cards.
+- **Detalhes ao tocar na foto:** uma compra mostra vendedor, valores, pagamento e chegada; um card do Binder mostra grupo e data. Dá para mover de pasta, editar e excluir.
+- **Excluir uma compra pelo Binder** pergunta se é para tirar só do Binder (a compra continua em Concluídas) ou excluir o card e a compra.
+- **Selecionar** vários cards para mover de pasta ou definir o grupo de uma vez.
+
+### Wishlist
+
+- **Os cards que você quer ter**, com foto, nome, grupo e pastas próprias.
+- **Adquiri este photocard:** "Comprei" abre o cadastro de compra já preenchido, e o card entra em Pagamento; "Já está comigo" leva o card direto para o Binder. O card não é duplicado.
+
+### Início e Financeiro
+
+- **Início:** total investido, já pago e falta pagar; quantos cards aguardam pagamento, estão a caminho, estão no Binder e na Wishlist; pagamentos pendentes com "Marcar pago"; próximas chegadas com "Chegou ✓"; compras recentes e os últimos cards no Binder.
+- **Financeiro:** quanto foi em photocards, fretes e taxas; gasto dos últimos 12 meses em colunas; gasto por mês, categoria, grupo de K-pop e vendedor; quantos cards há no Binder e na Wishlist por grupo. Só as compras entram nos valores.
+
+### Para todo o app
+
 - **Contas individuais:** cada pessoa só vê os próprios cards.
-- **Cadastro com foto:** pelo botão "+ Cadastrar Photocard", que abre uma janela com nome, vendedor, categoria, preço e fretes. A foto e o vendedor são opcionais. Dá para cadastrar vários cards de uma vez com "+ Adicionar outro photocard". Se fechar sem salvar, o cadastro abre vazio da próxima vez.
-- **Colar a foto:** no computador, copie uma imagem e aperte Ctrl+V (Cmd+V no Mac) no cadastro ou no Editar. Ela vai para o card em que você está.
-- **Categorias de compra:** Individual ou CEG, Nacional ou Internacional. O formulário mostra só os fretes e a taxa de importação (opcional) de cada categoria. Na CEG, você informa só a sua parte do que é dividido.
-- **Presente:** marque "Presente" no cadastro para um card que você ganhou. Ele não tem custo nenhum e vai direto para a aba Chegada. Também pode entrar num grupo, sem mudar os fretes nem o total dele.
-- **Grupos de compra:** junte cards da mesma compra num grupo com nome. Os fretes e a taxa de importação ficam no grupo e contam uma vez só, não importa quantos cards ele tenha. Um card fica em um grupo só.
-- **Janela do grupo:** nas abas, o grupo aparece como um bloco com os valores. Clique nele para abrir uma janela com os fretes e a taxa para marcar como pagos e os cards separados em Pagamento, Chegada e Coleção, cada um com as mesmas ações da tela inicial.
-- **Botão Grupos:** "Ver" abre a mesma janela do grupo, e "Editar" cria grupos com cards já cadastrados, adiciona ou tira cards, renomeia e exclui o grupo (os cards continuam cadastrados). Cards que já estão em outro grupo aparecem bloqueados, com o nome do grupo em que estão.
-- **Edição e exclusão:** corrija nome, vendedor, categoria, valores ou foto depois do cadastro, ou exclua um card.
-- **Controle financeiro:** mostra o total gasto, o que já foi pago e o que falta pagar.
-- **Três abas:** Pagamento, Chegada e Coleção, cada uma com a contagem de cards.
-- **Chegada:** separa os cards quitados (e os presentes) que ainda estão a caminho.
-- **Feito para o celular:** no celular, o botão + no canto da tela abre "Cadastrar photocard" e "Grupos".
+- **Botão + no celular:** em Compras, no Binder e na Wishlist ele abre o cadastro da seção; nas outras telas, mostra as opções. No computador, o mesmo fica no "+ Novo".
 - **Recuperar a senha** pelo link "Esqueci minha senha".
 - **Tema claro e escuro**, conforme o dispositivo.
-- **Instalar como app:** no celular ou no computador, adicione o site à tela inicial. Ele abre como app, com a logo do Pop Collection.
+- **Instalar como app:** no celular ou no computador, adicione o site à tela inicial.
 
 ## Como funciona
 
-O app abre nas abas **Pagamento**, **Chegada** e **Coleção**. O cadastro fica no botão **+ Cadastrar Photocard** e os grupos no botão **Grupos**, ao lado das abas. No celular, os dois ficam no botão **+** no canto da tela.
-
 ```mermaid
 flowchart LR
-    A[+ Cadastrar Photocard] --> B[Pagamento]
-    A -->|presente| C
-    B -->|tudo pago| C[Chegada]
-    C -->|Chegou ✓| D[Coleção]
+    W[Wishlist] -->|Comprei| P
+    W -->|Já está comigo| B
+    N[+ Registrar compra] --> P[Pagamento]
+    N -->|presente| C
+    P -->|tudo pago| C[Chegada]
+    C -->|Chegou ✓| B[Binder]
+    A[+ Adicionar ao Binder] --> B
 ```
 
-1. **Cadastrar:** clique em "+ Cadastrar Photocard", escolha a categoria e preencha os dados do card. O total (preço, fretes e taxa) é calculado sozinho, e o card entra na aba Pagamento. Para vários cards da mesma compra, use "+ Adicionar outro photocard" e dê um nome ao grupo. Se marcar "Presente", o card vai direto para a Chegada.
-2. **Pagamento:** marque cada valor pago (preço, fretes e taxa). O app mostra quanto ainda falta. Num grupo, cada card tem o seu "Preço pago" e os fretes e a taxa são marcados uma vez só, no bloco do grupo. Clique no grupo para abrir a janela com os cards dele.
-3. **Chegada:** com tudo pago, o card vem para cá. Quando receber, clique em "Chegou ✓" (ou em "Todos chegaram ✓" no grupo). Se marcou algo errado, "Voltar p/ pagamento" desfaz.
-4. **Coleção:** guarda os cards recebidos, um por um ou organizados por grupo ("Ainda não chegou" devolve o card para a Chegada). "Apagar coleção" remove esses cards e suas fotos, mas mantém o valor no total gasto.
+1. **Registrar:** a compra entra em Pagamento (ou direto na Chegada, se for presente).
+2. **Pagamento:** marque cada valor pago. Num pedido, os fretes e a taxa são marcados uma vez só, no próprio pedido.
+3. **Chegada:** com tudo pago, o card espera aqui até você tocar em "Chegou ✓".
+4. **Binder:** o card que chegou aparece na grade, e a compra fica em Concluídas com os valores.
+5. **Wishlist:** quando conseguir um card desejado, toque em "Adquiri este photocard".
 
 ## Telas
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/cadastro-fotos.png" alt="Cadastro de dois photocards num grupo novo, um deles com foto colada"><br><sub><b>Cadastro:</b> vários cards de uma vez, num grupo com nome. A foto pode ser enviada ou colada com Ctrl+V.</sub></td>
-    <td width="50%"><img src="docs/janela-grupo.png" alt="Janela do grupo com os fretes e os cards separados por etapa"><br><sub><b>Janela do grupo:</b> fretes, taxa e cards com as ações de cada etapa, incluindo um presente.</sub></td>
+    <td width="50%"><img src="docs/binder.png" alt="Binder no computador com pastas e grade de fotos"><br><sub><b>Binder:</b> pastas no topo, busca, filtro por grupo e a grade só com as fotos.</sub></td>
+    <td width="50%"><img src="docs/financeiro.png" alt="Financeiro com a divisão do gasto e o gráfico dos últimos 12 meses"><br><sub><b>Financeiro:</b> para onde vai o dinheiro e o gasto dos últimos 12 meses.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/grupo-editar.png" alt="Edição de grupo com cards de outro grupo bloqueados"><br><sub><b>Editar grupo:</b> cards que já estão em outro grupo ficam bloqueados.</sub></td>
-    <td width="50%" align="center"><img src="docs/celular-grupo.png" alt="Janela do grupo no celular" width="44%">&nbsp;<img src="docs/celular-menu.png" alt="Celular com o botão + aberto" width="44%"><br><sub><b>Celular:</b> a janela do grupo e o botão + com "Cadastrar photocard" e "Grupos".</sub></td>
+    <td width="50%"><img src="docs/cadastro-compra.png" alt="Janela de registrar compra"><br><sub><b>Registrar compra:</b> categoria, pedido, datas, pasta no Binder e os dados de cada card.</sub></td>
+    <td width="50%" align="center"><img src="docs/celular-binder.png" alt="Binder no celular" width="44%">&nbsp;<img src="docs/celular-adquiri.png" alt="Card da Wishlist com as opções de Adquiri este photocard" width="44%"><br><sub><b>Celular:</b> o Binder e o "Adquiri este photocard" da Wishlist.</sub></td>
   </tr>
 </table>
 
@@ -86,6 +110,19 @@ flowchart LR
 | Hospedagem | GitHub Pages (branch `main`, pasta `/ (root)`) |
 | Contas, banco e fotos | [Supabase](https://supabase.com), na região São Paulo |
 
+## Banco de dados
+
+O banco fica no Supabase (PostgreSQL). Tudo está em [`supabase/schema.sql`](supabase/schema.sql), que pode ser rodado de novo sem apagar dados.
+
+| Tabela | O que guarda |
+| --- | --- |
+| `cards` | Cada photocard. A coluna `kind` diz o tipo: `compra`, `binder` ou `wishlist`. Compras têm valores, pagamento e chegada; Binder e Wishlist só têm foto, nome e grupo (uma regra do banco impede valores neles). |
+| `card_groups` | Os pedidos, com os fretes e a taxa que valem para vários cards |
+| `folders` | As pastas do Binder e da Wishlist (`scope`) |
+| `stats` | O valor das coleções apagadas em versões antigas, que continua no total |
+
+Os totais do app somam só os cards com `kind = 'compra'`.
+
 ## Segurança
 
 - As regras de acesso (RLS) do [`schema.sql`](supabase/schema.sql) limitam cada pessoa aos próprios dados.
@@ -96,12 +133,12 @@ flowchart LR
 
 | Arquivo | O que faz |
 | --- | --- |
-| [`index.html`](index.html) | Telas de login e do app, e as janelas de cadastro de photocards e de grupos |
+| [`index.html`](index.html) | Telas de login e do app (Início, Compras, Binder, Wishlist e Financeiro) e as janelas de cadastro, pedidos, pastas e detalhes |
 | [`style.css`](style.css) | Visual (temas claro e escuro) |
-| [`app.js`](app.js) | Contas, cards, grupos, fotos e totais |
+| [`app.js`](app.js) | Contas, compras, pedidos, Binder, Wishlist, pastas, fotos, totais e gráficos |
 | [`config.js`](config.js) | URL e chave `anon` do Supabase |
 | [`icons/`](icons) e [`manifest.webmanifest`](manifest.webmanifest) | Logo, ícone da aba e ícone para instalar o site como app |
-| [`supabase/schema.sql`](supabase/schema.sql) | Tabelas, regras de segurança e bucket de fotos |
+| [`supabase/schema.sql`](supabase/schema.sql) | Tabelas, regras de segurança e bucket de fotos (veja [Banco de dados](#banco-de-dados)) |
 
 ## Rodar no computador
 
