@@ -37,7 +37,7 @@ O app tem cinco seções: **Início**, **Compras**, **Binder**, **Wishlist** e *
 - **Colar a foto:** no computador, copie uma imagem e aperte Ctrl+V (Cmd+V no Mac) no cadastro.
 - **Categorias:** Individual ou CEG, Nacional ou Internacional. O formulário mostra só os fretes e a taxa de importação de cada categoria. Na CEG, você informa só a sua parte do que é dividido.
 - **Presente:** um card que você ganhou não tem custo e vai direto para a Chegada.
-- **Pedidos:** os cards comprados juntos ficam num pedido, e os fretes e a taxa contam uma vez só. Registrar dois ou mais cards de uma vez cria o pedido sozinho. Na página do pedido dá para registrar um card comprado depois, trazer um card já cadastrado, tirar um card do pedido e editar o nome, a categoria e os fretes.
+- **Grupos:** os cards comprados juntos ficam num grupo, e os fretes e a taxa contam uma vez só. Registrar dois ou mais cards de uma vez cria o grupo sozinho. Na página do grupo dá para registrar um card comprado depois, trazer um card já cadastrado, tirar um card do grupo e editar o nome, a categoria e os fretes.
 - **Três abas:** Pagamento (marque cada valor pago), Chegada (com tudo pago, aguarde e toque em "Chegou ✓") e Concluídas.
 - **Busca e filtros** por nome, grupo de K-pop e categoria.
 
@@ -90,7 +90,7 @@ flowchart LR
 ```
 
 1. **Registrar:** a compra entra em Pagamento (ou direto na Chegada, se for presente).
-2. **Pagamento:** marque cada valor pago. Num pedido, os fretes e a taxa são marcados uma vez só, no próprio pedido.
+2. **Pagamento:** marque cada valor pago. Num grupo, os fretes e a taxa são marcados uma vez só, no próprio grupo.
 3. **Chegada:** com tudo pago, o card espera aqui até você tocar em "Chegou ✓".
 4. **Binder:** o card que chegou aparece na grade, e a compra fica em Concluídas com os valores.
 5. **Wishlist:** quando conseguir um card desejado, toque em "Adquiri este photocard".
@@ -100,7 +100,7 @@ flowchart LR
 <table>
   <tr>
     <td width="50%"><img src="docs/compras.png" alt="Compras com as abas Pagamento, Chegada e Concluídas"><br><sub><b>Compras:</b> as abas Pagamento, Chegada e Concluídas, com busca e filtros.</sub></td>
-    <td width="50%"><img src="docs/pedido.png" alt="Página de um pedido com os fretes e os cards comprados juntos"><br><sub><b>Pedido:</b> fretes e taxa uma vez só, registrar ou trazer cards e tirar do pedido.</sub></td>
+    <td width="50%"><img src="docs/pedido.png" alt="Página de um grupo com os fretes e os cards comprados juntos"><br><sub><b>Grupo:</b> fretes e taxa uma vez só, registrar ou trazer cards e tirar do grupo.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/binder.png" alt="Binder no computador com pastas e grade de fotos"><br><sub><b>Binder:</b> pastas no topo, busca, filtro por grupo e a grade só com as fotos.</sub></td>
@@ -108,10 +108,10 @@ flowchart LR
   </tr>
   <tr>
     <td width="50%"><img src="docs/financeiro.png" alt="Financeiro com a divisão do gasto e o gráfico dos últimos 12 meses"><br><sub><b>Financeiro:</b> para onde vai o dinheiro e o gasto dos últimos 12 meses.</sub></td>
-    <td width="50%"><img src="docs/cadastro-compra.png" alt="Janela de registrar compra"><br><sub><b>Registrar compra:</b> categoria, pedido, data da compra, pasta no Binder e os dados de cada card.</sub></td>
+    <td width="50%"><img src="docs/cadastro-compra.png" alt="Janela de registrar compra"><br><sub><b>Registrar compra:</b> categoria, grupo, data da compra, pasta no Binder e os dados de cada card.</sub></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><img src="docs/celular-binder.png" alt="Binder no celular" width="24%">&nbsp;<img src="docs/celular-adquiri.png" alt="Card da Wishlist com as opções de Adquiri este photocard" width="24%">&nbsp;<img src="docs/celular-pedido.png" alt="Página do pedido no celular" width="24%"><br><sub><b>Celular:</b> o Binder, o "Adquiri este photocard" da Wishlist e a página de um pedido.</sub></td>
+    <td colspan="2" align="center"><img src="docs/celular-binder.png" alt="Binder no celular" width="24%">&nbsp;<img src="docs/celular-adquiri.png" alt="Card da Wishlist com as opções de Adquiri este photocard" width="24%">&nbsp;<img src="docs/celular-pedido.png" alt="Página do grupo no celular" width="24%"><br><sub><b>Celular:</b> o Binder, o "Adquiri este photocard" da Wishlist e a página de um grupo.</sub></td>
   </tr>
 </table>
 
@@ -132,7 +132,7 @@ O banco fica no Supabase (PostgreSQL). Tudo está em [`supabase/schema.sql`](sup
 | Tabela | O que guarda |
 | --- | --- |
 | `cards` | Cada photocard. A coluna `kind` diz o tipo: `compra`, `binder` ou `wishlist`. Compras têm valores, pagamento e chegada; Binder e Wishlist só têm foto, nome e grupo (uma regra do banco impede valores neles). |
-| `card_groups` | Os pedidos, com os fretes e a taxa que valem para vários cards |
+| `card_groups` | Os grupos, com os fretes e a taxa que valem para vários cards |
 | `folders` | As pastas do Binder e da Wishlist (`scope`) |
 | `stats` | O valor das coleções apagadas em versões antigas, que continua no total |
 | `profiles` | O perfil de cada pessoa: @username, nome, foto, grupos favoritos e quem pode ver o Binder e a Wishlist |
@@ -152,9 +152,9 @@ Os totais do app somam só os cards com `kind = 'compra'`.
 
 | Arquivo | O que faz |
 | --- | --- |
-| [`index.html`](index.html) | Telas de login e do app (Início, Compras, Binder, Wishlist e Financeiro) e as janelas de cadastro, pedidos, pastas e detalhes |
+| [`index.html`](index.html) | Telas de login e do app (Início, Compras, Binder, Wishlist e Financeiro) e as janelas de cadastro, grupos, pastas e detalhes |
 | [`style.css`](style.css) | Visual (temas claro e escuro) |
-| [`app.js`](app.js) | Contas, compras, pedidos, Binder, Wishlist, pastas, fotos, totais e gráficos |
+| [`app.js`](app.js) | Contas, compras, grupos, Binder, Wishlist, pastas, fotos, totais e gráficos |
 | [`config.js`](config.js) | URL e chave `anon` do Supabase |
 | [`icons/`](icons) e [`manifest.webmanifest`](manifest.webmanifest) | Logo, ícone da aba e ícone para instalar o site como app |
 | [`supabase/schema.sql`](supabase/schema.sql) | Tabelas, regras de segurança e bucket de fotos (veja [Banco de dados](#banco-de-dados)) |
