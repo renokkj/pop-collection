@@ -23,7 +23,7 @@
 <meta name="apple-mobile-web-app-title" content="Pop Collection">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -68,6 +68,42 @@
   </div>
 </section>
 
+<!-- Primeira vez: criar o perfil (@username e nome) -->
+<section class="wrap" id="profileSetupView" hidden>
+  <div class="auth">
+    <div class="cards-deco" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div>
+      <h1>Crie o seu perfil</h1>
+      <p>O Pop Collection agora tem perfis de colecionador. Escolha como você vai aparecer. Valores, compras e pedidos nunca aparecem no perfil.</p>
+    </div>
+    <form id="psForm" autocomplete="off" novalidate>
+      <label class="f">Nome de exibição
+        <input type="text" id="psName" maxlength="40" placeholder="ex.: Isa" required>
+      </label>
+      <label class="f">Nome de usuário
+        <span class="at-input"><span aria-hidden="true">@</span><input type="text" id="psUser" maxlength="20" autocapitalize="none" spellcheck="false" placeholder="ex.: isa.collects" required aria-describedby="psUserMsg"></span>
+        <span class="field-msg" id="psUserMsg" aria-live="polite">Letras minúsculas, números, ponto e sublinhado.</span>
+      </label>
+      <div class="f"><span id="lpsBinder">Quem vê o seu Binder</span>
+        <div class="seg" role="radiogroup" aria-labelledby="lpsBinder">
+          <label><input type="radio" name="psBinder" value="todos" checked><span>Todos</span></label>
+          <label><input type="radio" name="psBinder" value="so_eu"><span>Somente eu</span></label>
+        </div>
+      </div>
+      <div class="f"><span id="lpsWish">Quem vê a sua Wishlist</span>
+        <div class="seg" role="radiogroup" aria-labelledby="lpsWish">
+          <label><input type="radio" name="psWish" value="todos" checked><span>Todos</span></label>
+          <label><input type="radio" name="psWish" value="so_eu"><span>Somente eu</span></label>
+        </div>
+      </div>
+      <p class="hint">Dá para mudar tudo isso depois, em Editar perfil.</p>
+      <div class="msg" id="psMsg" hidden></div>
+      <button class="btn-primary" type="submit" id="psSubmit">Criar perfil</button>
+      <button class="linkbtn" type="button" id="psLogout">Sair da conta</button>
+    </form>
+  </div>
+</section>
+
 <!-- App -->
 <div class="app" id="appView" hidden>
   <!-- navegação: barra lateral no computador, barra inferior no celular -->
@@ -103,13 +139,16 @@
         <span>Financeiro</span>
       </a>
     </div>
-    <div class="side-user"><span>Conta: <b id="uEmail"></b></span><button class="btn-ghost" type="button" id="logout">Sair</button></div>
+    <a class="side-me" href="#perfil" id="meSide" aria-label="Meu perfil">
+      <span class="avatar sm" id="meSideAv"></span>
+      <span class="side-me-txt"><b id="meSideName"></b><span id="meSideUser"></span></span>
+    </a>
   </nav>
 
   <main class="main">
     <header class="topbar">
       <div class="brand brand-m"><img src="icons/logo.svg" alt="" width="26" height="26"><span>Pop Collection</span></div>
-      <button class="btn-ghost btn-sm" type="button" id="logoutM">Sair</button>
+      <a class="top-me" href="#perfil" id="meTop" aria-label="Meu perfil"><span class="avatar sm" id="meTopAv"></span></a>
     </header>
 
     <div id="notice" class="notice" hidden></div>
@@ -166,6 +205,12 @@
       <div class="notice soft" id="bNoArtist" hidden></div>
       <div class="pgrid" id="bGrid"></div>
       <div class="selbar" id="bSelBar" hidden></div>
+    </section>
+
+    <!-- Meu perfil -->
+    <section class="sec" id="secPerfil" aria-labelledby="pName" hidden>
+      <div class="prof" id="prof"></div>
+      <div class="prows" id="pRows"></div>
     </section>
 
     <!-- Financeiro -->
@@ -289,6 +334,60 @@
     </div>
   </dialog>
 
+  <!-- Editar perfil -->
+  <dialog class="sheet sheet-sm" id="profileDialog" aria-labelledby="peTitle">
+    <div class="sheet-box">
+      <div class="sheet-head">
+        <h2 id="peTitle">Editar perfil</h2>
+        <button class="icon-btn sheet-close" type="button" id="peClose" aria-label="Fechar">✕</button>
+      </div>
+      <form class="add" id="peForm" autocomplete="off" novalidate>
+        <div class="pe-photo">
+          <span class="avatar lg" id="peAv"></span>
+          <div class="pe-photo-btns">
+            <label class="btn-ghost btn-sm cover-up">Trocar foto<input type="file" id="peFile" accept="image/*"></label>
+            <button class="icon-btn" type="button" id="peNoPhoto">Tirar foto</button>
+          </div>
+        </div>
+        <label class="f">Nome de exibição
+          <input type="text" id="peName" maxlength="40" required>
+        </label>
+        <label class="f">Nome de usuário
+          <span class="at-input"><span aria-hidden="true">@</span><input type="text" id="peUser" maxlength="20" autocapitalize="none" spellcheck="false" required aria-describedby="peUserMsg"></span>
+          <span class="field-msg" id="peUserMsg" aria-live="polite"></span>
+        </label>
+        <div class="f"><span>Grupos favoritos <small class="muted">(até 5)</small></span>
+          <div class="chips" id="peGroups"></div>
+          <div class="pe-addgroup">
+            <input type="text" id="peGroupIn" list="artistList" maxlength="60" placeholder="ex.: aespa" aria-label="Adicionar grupo favorito">
+            <button class="btn-ghost btn-sm" type="button" id="peGroupAdd">Adicionar</button>
+          </div>
+        </div>
+        <div class="f"><span id="lpeBinder">Quem vê o seu Binder</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lpeBinder">
+            <label><input type="radio" name="peBinder" value="todos"><span>Todos</span></label>
+            <label><input type="radio" name="peBinder" value="so_eu"><span>Somente eu</span></label>
+          </div>
+        </div>
+        <div class="f"><span id="lpeWish">Quem vê a sua Wishlist</span>
+          <div class="seg" role="radiogroup" aria-labelledby="lpeWish">
+            <label><input type="radio" name="peWish" value="todos"><span>Todos</span></label>
+            <label><input type="radio" name="peWish" value="so_eu"><span>Somente eu</span></label>
+          </div>
+        </div>
+        <p class="hint">Valores, compras, pedidos e datas nunca aparecem no perfil, em nenhuma opção.</p>
+        <div class="msg-err" id="peErr" hidden></div>
+        <div class="form-foot">
+          <span class="total-preview" id="peAccount"></span>
+          <div class="form-btns">
+            <button class="btn-ghost" type="button" id="peCancel">Cancelar</button>
+            <button class="btn-primary" type="submit" id="peSubmit">Salvar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <!-- pasta: nome, capa e exclusão -->
   <dialog class="sheet sheet-sm" id="folderDialog" aria-labelledby="fdTitle">
     <div class="sheet-box">
@@ -390,7 +489,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=20"></script>
-<script src="app.js?v=20"></script>
+<script src="config.js?v=21"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

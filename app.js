@@ -7,7 +7,7 @@
   const money = (n) => brl.format(Number(n) || 0);
   const cents = (v) => Math.round((parseFloat(String(v ?? "").replace(",", ".")) || 0) * 100) / 100;
 
-  const views = ["authView", "resetView", "appView", "setupView"];
+  const views = ["authView", "resetView", "appView", "setupView", "profileSetupView"];
   const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
   if (!window.supabase || !cfg.SUPABASE_URL || cfg.SUPABASE_URL.includes("SEU-PROJETO")) {
@@ -24,10 +24,12 @@
   let folders = []; // pastas do Binder (e, depois, da Wishlist)
   let archived = { total: 0, count: 0 };
   let photoUrls = new Map(); // image_path -> signed url
+  let profile = null; // o seu perfil (@username, nome, foto, grupos, visibilidade)
+  let followN = { seguidores: 0, seguindo: 0 }; // contadores do seu perfil
   let tab = "pay";
   try { const t = localStorage.getItem("pc-tab"); if (["pay", "arr", "col"].includes(t)) tab = t; } catch (e) {}
   // seção aberta (fica no endereço: #inicio, #compras, #financeiro)
-  const SECS = ["inicio", "compras", "binder", "wishlist", "financeiro"];
+  const SECS = ["inicio", "compras", "binder", "wishlist", "financeiro", "perfil"];
   let sec = SECS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "inicio";
   // filtros de Compras
   const filt = { q: "", artist: "", kind: "" };
@@ -165,21 +167,31 @@
     enterApp();
   });
 
-  $("logout").addEventListener("click", async () => { await sb.auth.signOut(); });
-  $("logoutM").addEventListener("click", async () => { await sb.auth.signOut(); });
+  const logout = async () => { await sb.auth.signOut(); };
+  $("psLogout").addEventListener("click", logout);
 
   sb.auth.onAuthStateChange((event, session) => {
     if (event === "PASSWORD_RECOVERY") { user = session?.user || null; show("resetView"); return; }
     const next = session?.user || null;
     if (next && (!user || user.id !== next.id)) { user = next; enterApp(); }
-    else if (!next) { user = null; cards = []; setGroups([]); photoUrls = new Map(); saving = false; closeForm(); resetForm(); closeGroups(); setMode("login"); show("authView"); }
+    else if (!next) { user = null; profile = null; cards = []; setGroups([]); photoUrls = new Map(); saving = false; closeForm(); resetForm(); closeGroups(); setMode("login"); show("authView"); }
   });
 
-  function enterApp() {
-    $("uEmail").textContent = user.email || "";
+  // Antes do app: o perfil. Sem perfil, a pessoa cria o @username primeiro.
+  // Se a tabela de perfis ainda não existir no banco, o app abre normalmente com um aviso.
+  async function enterApp() {
+    const me = user;
+    let missing = false;
+    const { data, error } = await sb.from("profiles").select("*").eq("id", me.id).maybeSingle();
+    if (user !== me) return;
+    if (error) missing = true;
+    profile = data || null;
+    if (!profile && !missing) { openSetup(); return; }
+    if (profile) loadFollowCounts();
     show("appView");
     loading = true; render();
-    loadAll();
+    await loadAll();
+    if (missing) notice("Falta atualizar o banco para usar o perfil: rode o arquivo supabase/schema.sql no Supabase e recarregue a página.");
   }
 
 
@@ -208,7 +220,7 @@
   }
 
   async function signPhotos() {
-    const need = [...cards.map((c) => c.image_path), ...folders.map((f) => f.cover_path)].filter((p) => p && !photoUrls.has(p));
+    const need = [...cards.map((c) => c.image_path), ...folders.map((f) => f.cover_path), profile && profile.avatar_path].filter((p) => p && !photoUrls.has(p));
     if (!need.length) return;
     const { data } = await sb.storage.from(BUCKET).createSignedUrls(need, 60 * 60 * 6);
     (data || []).forEach((d) => { if (d.signedUrl) photoUrls.set(d.path, d.signedUrl); });
@@ -1458,6 +1470,266 @@
     }
   }
 
+
+  // ---------- perfil ----------
+  // Etapa 1: o seu perfil, com o Binder e a Wishlist em grade. Só mostra o que é da coleção:
+  // nome, grupo e foto dos cards. Valores, pedidos, vendedor e datas ficam de fora.
+  const VIS_NAME = { todos: "Todos", so_eu: "Somente eu" };
+  const RESERVED = ["admin", "administrador", "suporte", "support", "popcollection", "pop.collection", "pop_collection", "perfil", "busca", "colecionadores", "null", "undefined"];
+  const cleanUser = (v) => String(v || "").trim().replace(/^@+/, "").toLowerCase();
+  function userProblem(u) {
+    if (u.length < 3) return "Use pelo menos 3 caracteres.";
+    if (!/^[a-z0-9._]+$/.test(u)) return "Use só letras sem acento, números, ponto e sublinhado.";
+    if (/^\.|\.$|\.\./.test(u)) return "O ponto não pode ficar no começo, no fim ou repetido.";
+    if (RESERVED.includes(u)) return "Esse nome é reservado. Escolha outro.";
+    return "";
+  }
+  // procura se o @username já é de outra pessoa (a última digitação vence)
+  function userChecker(input, msg, okText) {
+    let seq = 0, timer = null;
+    const state = { ok: false, value: "" };
+    const set = (text, kind) => { msg.textContent = text; msg.className = "field-msg" + (kind ? " " + kind : ""); };
+    const check = () => {
+      clearTimeout(timer);
+      const u = cleanUser(input.value);
+      if (input.value !== u) { const pos = input.selectionStart; input.value = u; try { input.setSelectionRange(pos, pos); } catch (e) {} }
+      state.ok = false; state.value = u;
+      const bad = u ? userProblem(u) : "";
+      if (!u) return set(okText, "");
+      if (bad) return set(bad, "err");
+      if (profile && profile.username === u) { state.ok = true; return set("Este é o seu nome de usuário.", ""); }
+      set("Conferindo…", "");
+      const my = ++seq;
+      timer = setTimeout(async () => {
+        const { data, error } = await sb.from("profiles").select("id").eq("username", u).maybeSingle();
+        if (my !== seq) return;
+        if (error) return set("Não consegui conferir agora. Tente de novo.", "err");
+        if (data && data.id !== user.id) return set(`@${u} já está em uso.`, "err");
+        state.ok = true; set(`@${u} está livre.`, "ok");
+      }, 350);
+    };
+    input.addEventListener("input", check);
+    state.check = check;
+    return state;
+  }
+  const saveError = (err) => (err && err.code === "23505" ? "Esse @username acabou de ser escolhido por outra pessoa. Tente outro." : "Não consegui salvar: " + (err?.message || "erro desconhecido"));
+
+  function avatar(node, p) {
+    const src = p && p.avatar_path && photoUrls.get(p.avatar_path);
+    node.replaceChildren(src ? el("img", { src, alt: "" }) : el("span", { text: ((p && p.display_name) || "?").trim().charAt(0).toUpperCase() }));
+    node.classList.toggle("empty", !src);
+  }
+  // seguidores e seguindo: contados na hora no banco
+  async function loadFollowCounts() {
+    const me = user;
+    const [a, b] = await Promise.all([
+      sb.from("follows").select("*", { count: "exact", head: true }).eq("following_id", me.id),
+      sb.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", me.id),
+    ]);
+    if (user !== me) return;
+    followN = { seguidores: a.count || 0, seguindo: b.count || 0 };
+    if (sec === "perfil") render();
+  }
+  function renderMe() {
+    avatar($("meSideAv"), profile); avatar($("meTopAv"), profile);
+    $("meSideName").textContent = profile ? profile.display_name : "Meu perfil";
+    $("meSideUser").textContent = profile ? "@" + profile.username : user ? user.email || "" : "";
+    const on = sec === "perfil";
+    [$("meSide"), $("meTop")].forEach((a) => { if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  }
+
+  // primeira vez: criar o perfil
+  const psCheck = userChecker($("psUser"), $("psUserMsg"), "Letras minúsculas, números, ponto e sublinhado.");
+  function openSetup() {
+    show("profileSetupView");
+    authMsg("", "err", "psMsg");
+    if (!$("psUser").value) {
+      const base = cleanUser((user.email || "").split("@")[0]).replace(/[^a-z0-9._]/g, "").replace(/^\.+|\.+$/g, "").replace(/\.\.+/g, ".").slice(0, 20);
+      if (base.length >= 3 && !userProblem(base)) { $("psUser").value = base; psCheck.check(); }
+    }
+    $("psName").focus();
+  }
+  $("psForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("psName").value.trim(), u = cleanUser($("psUser").value);
+    if (!name) { authMsg("Escreva o nome de exibição.", "err", "psMsg"); return $("psName").focus(); }
+    const bad = u ? userProblem(u) : "Escolha um nome de usuário.";
+    if (bad) { authMsg(bad, "err", "psMsg"); return $("psUser").focus(); }
+    const btn = $("psSubmit"); btn.disabled = true; authMsg("", "err", "psMsg");
+    const { data, error } = await sb.from("profiles").insert({
+      username: u, display_name: name,
+      binder_visibility: radio("psBinder") || "todos", wishlist_visibility: radio("psWish") || "todos",
+    }).select().single();
+    btn.disabled = false;
+    if (error) return authMsg(saveError(error), "err", "psMsg");
+    profile = data;
+    loadFollowCounts();
+    toast("Perfil criado!");
+    show("appView");
+    loading = true; render();
+    loadAll();
+  });
+
+  // tela do perfil: foto no centro, nome, @username e Editar; embaixo, Binder e Wishlist em carrossel
+  const ROW_MAX = 20; // cards por carrossel; o resto fica em "Ver tudo"
+  function renderPerfil() {
+    const p = profile;
+    if (!p) {
+      $("prof").replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Perfil indisponível" }), el("span", { text: "Rode o arquivo supabase/schema.sql no Supabase e recarregue a página." })));
+      $("pRows").replaceChildren();
+      return;
+    }
+    const av = el("span", { class: "avatar xl" }); avatar(av, p);
+    const stat = (n, label) => el("span", { class: "pstat" }, el("b", { class: "num", text: String(n) }), " " + label);
+    $("prof").replaceChildren(
+      av,
+      el("h1", { id: "pName", text: p.display_name }),
+      el("span", { class: "prof-user", text: "@" + p.username }),
+      el("div", { class: "prof-stats" },
+        stat(followN.seguidores, followN.seguidores === 1 ? "seguidor" : "seguidores"),
+        el("span", { class: "dot", "aria-hidden": "true", text: "·" }),
+        stat(followN.seguindo, "seguindo")),
+      p.favorite_groups && p.favorite_groups.length ? el("div", { class: "chips" }, ...p.favorite_groups.map((g) => el("span", { class: "chip", text: g }))) : null,
+      el("div", { class: "prof-btns" },
+        el("button", { class: "pill", type: "button", text: "Editar", onclick: openProfileEdit }),
+        el("button", { class: "pill pill-ghost", type: "button", text: "Sair", onclick: logout })));
+    $("pRows").replaceChildren(profRow("binder", p.binder_visibility), profRow("wishlist", p.wishlist_visibility));
+  }
+  function profRow(scope, vis) {
+    const wish = scope === "wishlist", all = scopeCards(scope), NAME = SCOPE_NAME[scope];
+    const head = el("div", { class: "prow-head" },
+      el("a", { class: "prow-title", href: "#" + scope },
+        el("h2", { text: NAME }), el("span", { class: "count", text: String(all.length) }),
+        el("span", { class: "chev", "aria-hidden": "true" })),
+      el("span", { class: "prow-vis" + (vis === "so_eu" ? " lock" : ""), text: vis === "so_eu" ? "Só você vê" : "Visível para todos" }));
+    head.querySelector(".chev").innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>';
+    let body;
+    if (loading) body = el("div", { class: "prow-empty" }, "Carregando…");
+    else if (!all.length) body = el("div", { class: "prow-empty" },
+      el("span", { text: wish ? "Sua Wishlist está vazia." : "Seu Binder está vazio." }),
+      linkBtn(wish ? "Adicionar à Wishlist" : "Adicionar ao Binder", scope));
+    else body = el("div", { class: "prow", role: "list" },
+      ...all.slice(0, ROW_MAX).map((c) => {
+        const src = c.image_path && photoUrls.get(c.image_path);
+        return el("button", { class: "prow-item", type: "button", role: "listitem", onclick: () => openCard(c) },
+          el("span", { class: "pc" }, src ? el("img", { src, alt: "", loading: "lazy" }) : el("span", { class: "pc-ph", text: (c.name || "?").charAt(0).toUpperCase() })),
+          el("span", { class: "prow-name", text: c.name }),
+          el("span", { class: "prow-sub", text: c.artist || " " }));
+      }),
+      all.length > ROW_MAX ? el("a", { class: "prow-item prow-more", href: "#" + scope, role: "listitem" },
+        el("span", { class: "pc" }, el("span", { text: "Ver tudo" })), el("span", { class: "prow-name", text: plural(all.length, "card", "cards") })) : null);
+    return el("section", { class: "prow-sec", "aria-label": NAME }, head, body);
+  }
+
+  // Editar perfil
+  const pedlg = $("profileDialog");
+  const peCheck = userChecker($("peUser"), $("peUserMsg"), "");
+  let peGroups = [], pePhoto = undefined, pePreview = null, peSaving = false; // pePhoto: undefined = sem mudança, null = tirar, Blob = nova
+  function peAvatar() {
+    const node = $("peAv");
+    if (pePhoto instanceof Blob) { node.replaceChildren(el("img", { src: pePreview, alt: "" })); node.classList.remove("empty"); }
+    else avatar(node, pePhoto === null ? { display_name: $("peName").value || profile.display_name } : { ...profile, display_name: $("peName").value || profile.display_name });
+    $("peNoPhoto").hidden = pePhoto === null || (pePhoto === undefined && !profile.avatar_path);
+  }
+  function peChips() {
+    $("peGroups").replaceChildren(...peGroups.map((g) => el("span", { class: "chip" }, g,
+      el("button", { type: "button", class: "chip-x", "aria-label": "Tirar " + g, text: "✕", onclick: () => { peGroups = peGroups.filter((x) => x !== g); peChips(); } }))));
+    const full = peGroups.length >= 5;
+    $("peGroupIn").disabled = full; $("peGroupAdd").disabled = full;
+    $("peGroupIn").placeholder = full ? "Limite de 5 grupos" : "ex.: aespa";
+  }
+  function peAddGroup() {
+    const g = artistName($("peGroupIn").value);
+    if (!g) return $("peGroupIn").focus();
+    if (!peGroups.some((x) => x.toLowerCase() === g.toLowerCase()) && peGroups.length < 5) peGroups.push(g);
+    $("peGroupIn").value = ""; peChips(); $("peGroupIn").focus();
+  }
+  $("peGroupAdd").addEventListener("click", peAddGroup);
+  $("peGroupIn").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); peAddGroup(); } });
+  $("peName").addEventListener("input", () => { if (!(pePhoto instanceof Blob)) peAvatar(); });
+  $("peFile").addEventListener("change", async () => {
+    const f = $("peFile").files && $("peFile").files[0];
+    $("peFile").value = "";
+    if (!f) return;
+    try {
+      pePhoto = await squareShrink(f);
+      if (pePreview) URL.revokeObjectURL(pePreview);
+      pePreview = URL.createObjectURL(pePhoto);
+      peAvatar();
+    } catch (err) { toast("Não deu para ler essa imagem. Tente um JPG ou PNG."); }
+  });
+  $("peNoPhoto").addEventListener("click", () => { pePhoto = null; peAvatar(); });
+  pedlg.addEventListener("paste", async (ev) => {
+    const f = pastedImage(ev);
+    if (!f || ev.target.closest("input[type=text], textarea")) return;
+    ev.preventDefault();
+    try { pePhoto = await squareShrink(f); if (pePreview) URL.revokeObjectURL(pePreview); pePreview = URL.createObjectURL(pePhoto); peAvatar(); } catch (err) {}
+  });
+  // foto de perfil: recorte quadrado no centro, 320 × 320
+  async function squareShrink(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const side = Math.min(img.width, img.height), out = Math.min(320, side);
+      const cv = document.createElement("canvas"); cv.width = cv.height = out;
+      cv.getContext("2d").drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, out, out);
+      return await new Promise((res) => cv.toBlob(res, "image/jpeg", 0.85));
+    } finally { URL.revokeObjectURL(url); }
+  }
+  function openProfileEdit() {
+    if (!profile) return;
+    $("peName").value = profile.display_name;
+    $("peUser").value = profile.username; peCheck.check();
+    peGroups = [...(profile.favorite_groups || [])]; peChips(); $("peGroupIn").value = "";
+    setRadio("peBinder", profile.binder_visibility); setRadio("peWish", profile.wishlist_visibility);
+    pePhoto = undefined; peAvatar();
+    $("peErr").hidden = true;
+    $("peAccount").textContent = "Conta: " + (user.email || "") + " (só você vê)";
+    if (!pedlg.open) pedlg.showModal();
+  }
+  function closeProfileEdit() { if (!peSaving && pedlg.open) pedlg.close(); }
+  $("peClose").addEventListener("click", closeProfileEdit);
+  $("peCancel").addEventListener("click", closeProfileEdit);
+  pedlg.addEventListener("cancel", (e) => { if (peSaving) e.preventDefault(); });
+  pedlg.addEventListener("click", (e) => { if (e.target === pedlg) closeProfileEdit(); });
+  const peError = (msg, focus) => { $("peErr").textContent = msg; $("peErr").hidden = !msg; if (focus) focus.focus(); };
+  $("peForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (peSaving) return;
+    const name = $("peName").value.trim(), u = cleanUser($("peUser").value);
+    if (!name) return peError("Escreva o nome de exibição.", $("peName"));
+    const bad = u ? userProblem(u) : "Escolha um nome de usuário.";
+    if (bad) return peError(bad, $("peUser"));
+    if ($("peGroupIn").value.trim()) peAddGroup();
+    peSaving = true; $("peSubmit").disabled = true; peError("");
+    const old = profile.avatar_path;
+    let path = old, uploaded = null;
+    try {
+      if (pePhoto instanceof Blob) {
+        uploaded = `${user.id}/perfil/${crypto.randomUUID()}.jpg`;
+        const { error } = await sb.storage.from(BUCKET).upload(uploaded, pePhoto, { contentType: "image/jpeg" });
+        if (error) { uploaded = null; throw error; }
+        path = uploaded;
+      } else if (pePhoto === null) path = null;
+      const { data, error } = await sb.from("profiles").update({
+        display_name: name, username: u, favorite_groups: peGroups, avatar_path: path,
+        binder_visibility: radio("peBinder") || "todos", wishlist_visibility: radio("peWish") || "todos",
+      }).eq("id", user.id).select().single();
+      if (error) throw error;
+      if (old && old !== path) sb.storage.from(BUCKET).remove([old]);
+      if (uploaded && pePreview) photoUrls.set(uploaded, pePreview), (pePreview = null);
+      profile = data;
+      peSaving = false; $("peSubmit").disabled = false;
+      closeProfileEdit();
+      toast("Perfil atualizado.");
+      render();
+    } catch (err) {
+      if (uploaded) sb.storage.from(BUCKET).remove([uploaded]);
+      peSaving = false; $("peSubmit").disabled = false;
+      peError(saveError(err));
+    }
+  });
+
   // ---------- render ----------
   function el(tag, attrs = {}, ...kids) {
     const n = document.createElement(tag);
@@ -1666,6 +1938,8 @@
     $("secCompras").hidden = sec !== "compras";
     $("secFinanceiro").hidden = sec !== "financeiro";
     $("secBinder").hidden = sec !== "binder" && sec !== "wishlist";
+    $("secPerfil").hidden = sec !== "perfil";
+    renderMe();
     const pend = sm.byStage.pay.length + sm.byStage.arr.length;
     $("nPend").hidden = !pend;
     $("nPend").textContent = pend;
@@ -1955,6 +2229,7 @@
     if (sec === "inicio") renderInicio(sm);
     else if (sec === "compras") renderCompras(sm);
     else if (sec === "binder" || sec === "wishlist") renderBinder();
+    else if (sec === "perfil") renderPerfil();
     else renderFin(sm);
     if (cdlg.open) refreshCard();
     setFab(!$("fabMenu").hidden);

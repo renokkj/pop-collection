@@ -125,6 +125,49 @@ alter table public.cards
     references public.folders (id, user_id) on delete set null (folder_id);
 create index if not exists cards_folder_idx on public.cards (folder_id);
 
+-- 1e) Perfis (2026-11): cada conta tem um perfil com @username único.
+--     O perfil mostra só o que é da coleção: nunca valores, vendedor, pedidos ou datas de compra.
+--     username            = de 3 a 20 caracteres: letras minúsculas, números, ponto e sublinhado
+--     binder_visibility   = quem vê o Binder no perfil: 'todos' ou 'so_eu'
+--     wishlist_visibility = o mesmo para a Wishlist
+--     avatar_path         = foto de perfil, sempre na pasta <conta>/perfil/ do próprio dono
+create table if not exists public.profiles (
+  id                  uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  username            text not null,
+  display_name        text not null,
+  avatar_path         text,
+  favorite_groups     text[] not null default '{}',
+  binder_visibility   text not null default 'todos',
+  wishlist_visibility text not null default 'todos',
+  created_at          timestamptz not null default now()
+);
+alter table public.profiles
+  drop constraint if exists profiles_username_check,
+  add constraint profiles_username_check check (
+    username ~ '^[a-z0-9._]{3,20}$'
+    and username !~ '^[.]|[.]$|[.][.]'
+    and username not in ('admin', 'administrador', 'suporte', 'support', 'popcollection', 'pop.collection', 'pop_collection', 'perfil', 'busca', 'colecionadores', 'null', 'undefined')),
+  drop constraint if exists profiles_display_name_check,
+  add constraint profiles_display_name_check check (char_length(btrim(display_name)) between 1 and 40),
+  drop constraint if exists profiles_groups_check,
+  add constraint profiles_groups_check check (cardinality(favorite_groups) <= 5 and char_length(array_to_string(favorite_groups, ',')) <= 310),
+  drop constraint if exists profiles_avatar_check,
+  add constraint profiles_avatar_check check (avatar_path is null or avatar_path like id::text || '/perfil/%'),
+  drop constraint if exists profiles_visibility_check,
+  add constraint profiles_visibility_check check (
+    binder_visibility in ('todos', 'so_eu') and wishlist_visibility in ('todos', 'so_eu'));
+create unique index if not exists profiles_username_key on public.profiles (lower(username));
+
+-- 1f) Seguidores: "A segue B". Não precisa ser recíproco; ninguém segue a si mesmo nem duas vezes.
+create table if not exists public.follows (
+  follower_id  uuid not null default auth.uid() references public.profiles (id) on delete cascade,
+  following_id uuid not null references public.profiles (id) on delete cascade,
+  created_at   timestamptz not null default now(),
+  primary key (follower_id, following_id),
+  constraint follows_not_self check (follower_id <> following_id)
+);
+create index if not exists follows_following_idx on public.follows (following_id, created_at desc);
+
 -- 2) Total já gasto com coleções apagadas (para o "total gasto" não zerar)
 create table if not exists public.stats (
   user_id        uuid primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -137,6 +180,8 @@ alter table public.cards enable row level security;
 alter table public.stats enable row level security;
 alter table public.card_groups enable row level security;
 alter table public.folders enable row level security;
+alter table public.profiles enable row level security;
+alter table public.follows enable row level security;
 
 drop policy if exists "cards do dono" on public.cards;
 create policy "cards do dono" on public.cards
@@ -155,6 +200,39 @@ create policy "pastas do dono" on public.folders
   for all to authenticated
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
+
+-- perfis: quem está logado vê nome, @username e foto; só o dono cria e altera o seu
+drop policy if exists "perfis: ver" on public.profiles;
+create policy "perfis: ver" on public.profiles
+  for select to authenticated
+  using (true);
+
+drop policy if exists "perfis: criar o meu" on public.profiles;
+create policy "perfis: criar o meu" on public.profiles
+  for insert to authenticated
+  with check (id = auth.uid());
+
+drop policy if exists "perfis: alterar o meu" on public.profiles;
+create policy "perfis: alterar o meu" on public.profiles
+  for update to authenticated
+  using (id = auth.uid())
+  with check (id = auth.uid());
+
+-- seguidores: quem está logado vê as listas; só quem segue cria ou desfaz
+drop policy if exists "seguir: ver" on public.follows;
+create policy "seguir: ver" on public.follows
+  for select to authenticated
+  using (true);
+
+drop policy if exists "seguir: eu sigo" on public.follows;
+create policy "seguir: eu sigo" on public.follows
+  for insert to authenticated
+  with check (follower_id = auth.uid());
+
+drop policy if exists "seguir: deixar de seguir" on public.follows;
+create policy "seguir: deixar de seguir" on public.follows
+  for delete to authenticated
+  using (follower_id = auth.uid());
 
 drop policy if exists "stats do dono" on public.stats;
 create policy "stats do dono" on public.stats
