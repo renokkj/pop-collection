@@ -4,7 +4,7 @@
 
 # Pop Collection
 
-Controle as compras, os pagamentos, a chegada, a coleção e a wishlist dos seus photocards.
+Controle as compras, os pagamentos e a chegada dos seus photocards, monte o Binder e a Wishlist e siga outros colecionadores.
 
 [![Abrir o app](https://img.shields.io/badge/abrir_o_app-5b3fd6?style=for-the-badge)](https://renokkj.github.io/pop-collection/)
 
@@ -19,17 +19,17 @@ Controle as compras, os pagamentos, a chegada, a coleção e a wishlist dos seus
 <img src="docs/app-computador.png" alt="Tela inicial do Pop Collection no computador" width="68%">&nbsp;
 <img src="docs/app-celular.png" alt="Tela inicial do Pop Collection no celular" width="24%">
 
-<sub>Telas com dados de teste.</sub>
+<sub>Telas com dados de exemplo.</sub>
 
 </div>
 
 ## Sobre o projeto
 
-Criei o Pop Collection para resolver um problema meu: acompanhar quanto já paguei, o que falta pagar e quais photocards ainda estão a caminho. Depois ele virou também o lugar da minha coleção (o Binder) e dos cards que eu quero ter (a Wishlist). Foi o primeiro projeto que idealizei do zero, da ideia ao app publicado.
+Criei o Pop Collection para resolver um problema meu: acompanhar quanto já paguei, o que falta pagar e quais photocards ainda estão a caminho. Depois ele virou também o lugar da minha coleção (o Binder) e dos cards que eu quero ter (a Wishlist), e ganhou perfis para ver a coleção de outras pessoas e seguir quem coleciona os mesmos grupos. Foi o primeiro projeto que idealizei do zero, da ideia ao app publicado.
 
 ## O que o app faz
 
-O app tem cinco seções: **Início**, **Compras**, **Binder**, **Wishlist** e **Financeiro**. No computador elas ficam na barra lateral; no celular, na barra de baixo.
+O app tem cinco seções: **Início**, **Compras**, **Binder**, **Wishlist** e **Financeiro**, além do seu **Perfil** e da busca de **Colecionadores**. No computador tudo fica na barra lateral; no celular, as seções ficam na barra de baixo, e a busca e o perfil, no topo.
 
 ### Compras
 
@@ -38,8 +38,8 @@ O app tem cinco seções: **Início**, **Compras**, **Binder**, **Wishlist** e *
 - **Categorias:** Individual ou CEG, Nacional ou Internacional. O formulário mostra só os fretes e a taxa de importação de cada categoria. Na CEG, você informa só a sua parte do que é dividido.
 - **Presente:** um card que você ganhou não tem custo e vai direto para a Chegada.
 - **Grupos:** os cards comprados juntos ficam num grupo, e os fretes e a taxa contam uma vez só. Registrar dois ou mais cards de uma vez cria o grupo sozinho. Na página do grupo dá para registrar um card comprado depois, trazer um card já cadastrado, tirar um card do grupo e editar o nome, a categoria e os fretes.
-- **Três abas:** Pagamento (marque cada valor pago), Chegada (com tudo pago, aguarde e toque em "Chegou ✓") e Concluídas.
-- **Busca e filtros** por nome, grupo de K-pop e categoria.
+- **Três etapas:** Pagamento (falta pagar), Chegada (pago, a caminho) e Concluídas (já chegou). Cada etapa explica o que fazer nela, e a compra passa sozinha para a próxima.
+- **Busca e filtros** por nome, artista ("Todos os artistas") e categoria.
 
 ### Binder
 
@@ -73,6 +73,7 @@ O app tem cinco seções: **Início**, **Compras**, **Binder**, **Wishlist** e *
 - **Contas individuais:** seus cards, valores e compras só você edita e vê; os outros veem apenas o que você deixar visível no perfil.
 - **Botão + no celular:** em Compras, no Binder e na Wishlist ele abre o cadastro da seção; nas outras telas, mostra as opções. No computador, o mesmo fica no "+ Novo".
 - **Recuperar a senha** pelo link "Esqueci minha senha".
+- **Visual Y2K em roxo**, com vidro, brilho e molduras nos photocards.
 - **Tema claro e escuro**, conforme o dispositivo.
 - **Instalar como app:** no celular ou no computador, adicione o site à tela inicial.
 
@@ -99,11 +100,11 @@ flowchart LR
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/compras.png" alt="Compras com as abas Pagamento, Chegada e Concluídas"><br><sub><b>Compras:</b> as abas Pagamento, Chegada e Concluídas, com busca e filtros.</sub></td>
-    <td width="50%"><img src="docs/pedido.png" alt="Página de um grupo com os fretes e os cards comprados juntos"><br><sub><b>Grupo:</b> fretes e taxa uma vez só, registrar ou trazer cards e tirar do grupo.</sub></td>
+    <td width="50%"><img src="docs/compras.png" alt="Compras com as etapas Pagamento, Chegada e Concluídas"><br><sub><b>Compras:</b> as etapas Pagamento, Chegada e Concluídas, com busca e filtros.</sub></td>
+    <td width="50%"><img src="docs/grupo.png" alt="Página de um grupo com os fretes e os cards comprados juntos"><br><sub><b>Grupo:</b> fretes e taxa uma vez só, registrar ou trazer cards e tirar do grupo.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/binder.png" alt="Binder no computador com pastas e grade de fotos"><br><sub><b>Binder:</b> pastas no topo, busca, filtro por grupo e a grade só com as fotos.</sub></td>
+    <td width="50%"><img src="docs/binder.png" alt="Binder no computador com pastas e grade de fotos"><br><sub><b>Binder:</b> pastas no topo, busca, filtro por artista e a grade só com as fotos.</sub></td>
     <td width="50%"><img src="docs/wishlist.png" alt="Wishlist com pastas e os cards desejados"><br><sub><b>Wishlist:</b> os cards que você quer ter, com pastas próprias.</sub></td>
   </tr>
   <tr>
@@ -111,17 +112,28 @@ flowchart LR
     <td width="50%"><img src="docs/cadastro-compra.png" alt="Janela de registrar compra"><br><sub><b>Registrar compra:</b> categoria, grupo, data da compra, pasta no Binder e os dados de cada card.</sub></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><img src="docs/celular-binder.png" alt="Binder no celular" width="24%">&nbsp;<img src="docs/celular-adquiri.png" alt="Card da Wishlist com as opções de Adquiri este photocard" width="24%">&nbsp;<img src="docs/celular-pedido.png" alt="Página do grupo no celular" width="24%"><br><sub><b>Celular:</b> o Binder, o "Adquiri este photocard" da Wishlist e a página de um grupo.</sub></td>
+    <td width="50%"><img src="docs/perfil.png" alt="Perfil com foto, @username, seguidores e o Binder em carrossel"><br><sub><b>Perfil:</b> foto, @username, seguidores, grupos favoritos e o Binder e a Wishlist em carrossel.</sub></td>
+    <td width="50%"><img src="docs/perfil-outro.png" alt="Perfil de outra colecionadora com o botão Seguindo"><br><sub><b>Perfil de outra pessoa:</b> o Binder e a Wishlist que ela deixou visíveis, e o botão Seguir.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/colecionadores.png" alt="Busca de colecionadores por grupo favorito"><br><sub><b>Colecionadores:</b> busca por @username, nome ou grupo favorito.</sub></td>
+    <td width="50%"><img src="docs/avisos.png" alt="Avisos de novos seguidores com Seguir de volta"><br><sub><b>Avisos:</b> quem começou a seguir você, com "Seguir de volta".</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/celular-perfil.png" alt="Perfil no celular" width="24%">&nbsp;<img src="docs/celular-compras.png" alt="Compras no celular" width="24%">&nbsp;<img src="docs/celular-binder.png" alt="Binder no celular" width="24%">&nbsp;<img src="docs/celular-perfil-outro.png" alt="Perfil de outra pessoa no celular" width="24%"><br><sub><b>Celular:</b> o perfil, Compras, o Binder e o perfil de outra pessoa.</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/escuro-inicio.png" alt="Início no tema escuro" width="68%"><br><sub><b>Tema escuro:</b> segue o tema do dispositivo.</sub></td>
   </tr>
 </table>
 
-<sub>Telas com dados de teste.</sub>
+<sub>Telas com dados de exemplo.</sub>
 
 ## Tecnologias
 
 | Parte | Tecnologia |
 | --- | --- |
-| Site | HTML, CSS e JavaScript puros, sem etapa de build |
+| Site | HTML, CSS e JavaScript puros, sem etapa de build; fontes Quicksand e Nunito (Google Fonts) |
 | Hospedagem | GitHub Pages (branch `main`, pasta `/ (root)`) |
 | Contas, banco e fotos | [Supabase](https://supabase.com), na região São Paulo |
 
@@ -152,9 +164,9 @@ Os totais do app somam só os cards com `kind = 'compra'`.
 
 | Arquivo | O que faz |
 | --- | --- |
-| [`index.html`](index.html) | Telas de login e do app (Início, Compras, Binder, Wishlist e Financeiro) e as janelas de cadastro, grupos, pastas e detalhes |
-| [`style.css`](style.css) | Visual (temas claro e escuro) |
-| [`app.js`](app.js) | Contas, compras, grupos, Binder, Wishlist, pastas, fotos, totais e gráficos |
+| [`index.html`](index.html) | Telas de login e do app (Início, Compras, Binder, Wishlist, Financeiro, Perfil e Colecionadores) e as janelas de cadastro, grupos, pastas, detalhes, perfil e avisos |
+| [`style.css`](style.css) | Visual Y2K em roxo, com vidro e brilho (temas claro e escuro) |
+| [`app.js`](app.js) | Contas, compras, grupos, Binder, Wishlist, pastas, fotos, totais, gráficos, perfis, seguir e avisos |
 | [`config.js`](config.js) | URL e chave `anon` do Supabase |
 | [`icons/`](icons) e [`manifest.webmanifest`](manifest.webmanifest) | Logo, ícone da aba e ícone para instalar o site como app |
 | [`supabase/schema.sql`](supabase/schema.sql) | Tabelas, regras de segurança e bucket de fotos (veja [Banco de dados](#banco-de-dados)) |
