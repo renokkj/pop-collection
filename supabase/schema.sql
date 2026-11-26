@@ -73,6 +73,58 @@ alter table public.cards
     references public.card_groups (id, user_id) on delete set null (group_id);
 create index if not exists cards_group_idx on public.cards (group_id);
 
+-- 1d) Binder e Wishlist (2026-11).
+--     kind = modalidade do card: 'compra' (tem valores e entra nos totais), 'binder' (card que você
+--     já tem, sem valores) ou 'wishlist' (card que você quer). Cards antigos ficam como compra.
+--     A situação continua calculada pelo app: wishlist = desejado; binder = na coleção;
+--     compra = Pagamento, Chegada ou na coleção (pelo "Chegou").
+--     wished_at    = quando entrou na Wishlist (fica guardado depois que o card é adquirido)
+--     artist       = grupo de K-pop (aespa, TWICE…); cards antigos ficam sem
+--     purchased_on = data da compra; cards antigos recebem a data em que foram cadastrados
+--     expected_on  = previsão de chegada, opcional
+--     folder_id    = pasta do Binder ou da Wishlist
+--     in_binder    = false quando a pessoa tira o card do Binder mas quer manter a compra
+alter table public.cards
+  add column if not exists kind         text not null default 'compra',
+  add column if not exists wished_at    timestamptz,
+  add column if not exists artist       text,
+  add column if not exists purchased_on date,
+  add column if not exists expected_on  date,
+  add column if not exists folder_id    uuid,
+  add column if not exists in_binder    boolean not null default true;
+update public.cards
+   set purchased_on = (created_at at time zone 'America/Sao_Paulo')::date
+ where purchased_on is null and kind = 'compra';
+alter table public.cards alter column purchased_on set default current_date;
+alter table public.cards
+  drop constraint if exists cards_kind_check,
+  add constraint cards_kind_check check (kind in ('compra', 'binder', 'wishlist')),
+  drop constraint if exists cards_artist_check,
+  add constraint cards_artist_check check (artist is null or char_length(artist) <= 60),
+  -- card de Binder ou Wishlist nunca tem valores nem pedido: não mexe nos totais
+  drop constraint if exists cards_no_money_check,
+  add constraint cards_no_money_check check (
+    kind = 'compra' or (price = 0 and shipping = 0 and shipping_to_gom = 0 and import_tax = 0 and group_id is null));
+create index if not exists cards_kind_idx on public.cards (user_id, kind);
+
+-- pastas: cada uma é do Binder ou da Wishlist; apagar a pasta só deixa os cards sem pasta
+create table if not exists public.folders (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  scope      text not null default 'binder' check (scope in ('binder', 'wishlist')),
+  name       text not null check (char_length(name) between 1 and 60),
+  cover_path text,
+  position   integer not null default 0,
+  created_at timestamptz not null default now(),
+  unique (id, user_id)
+);
+create index if not exists folders_user_idx on public.folders (user_id, scope, position);
+alter table public.cards
+  drop constraint if exists cards_folder_fk,
+  add constraint cards_folder_fk foreign key (folder_id, user_id)
+    references public.folders (id, user_id) on delete set null (folder_id);
+create index if not exists cards_folder_idx on public.cards (folder_id);
+
 -- 2) Total já gasto com coleções apagadas (para o "total gasto" não zerar)
 create table if not exists public.stats (
   user_id        uuid primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -84,6 +136,7 @@ create table if not exists public.stats (
 alter table public.cards enable row level security;
 alter table public.stats enable row level security;
 alter table public.card_groups enable row level security;
+alter table public.folders enable row level security;
 
 drop policy if exists "cards do dono" on public.cards;
 create policy "cards do dono" on public.cards
@@ -97,13 +150,19 @@ create policy "grupos do dono" on public.card_groups
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
 
+drop policy if exists "pastas do dono" on public.folders;
+create policy "pastas do dono" on public.folders
+  for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
 drop policy if exists "stats do dono" on public.stats;
 create policy "stats do dono" on public.stats
   for all to authenticated
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
 
--- 4) Apagar coleção: soma o valor no histórico e apaga os cards que chegaram.
+-- 4) Apagar coleção (antigo; o app não usa mais desde o Binder): soma o valor no histórico e apaga os cards que chegaram.
 --    Num card com grupo conta só o preço; os fretes e a taxa do grupo entram no histórico
 --    quando todos os cards do grupo saem junto (aí o grupo, vazio, também é apagado).
 --    Devolve os caminhos das fotos para o app apagar do Storage.
@@ -125,7 +184,7 @@ begin
          coalesce(array_agg(image_path) filter (where image_path is not null), '{}')
     into v_total, v_count, v_paths
     from cards
-   where user_id = auth.uid() and arrived;
+   where user_id = auth.uid() and kind = 'compra' and arrived;
 
   if v_count = 0 then
     return '{}';
@@ -136,7 +195,7 @@ begin
     into v_groups, v_fees
     from card_groups g
    where g.user_id = auth.uid()
-     and exists (select 1 from cards c where c.group_id = g.id and c.arrived)
+     and exists (select 1 from cards c where c.group_id = g.id and c.kind = 'compra' and c.arrived)
      and not exists (select 1 from cards c where c.group_id = g.id and not c.arrived);
 
   insert into stats (user_id, archived_total, archived_count)
@@ -145,7 +204,7 @@ begin
     set archived_total = stats.archived_total + excluded.archived_total,
         archived_count = stats.archived_count + excluded.archived_count;
 
-  delete from cards where user_id = auth.uid() and arrived;
+  delete from cards where user_id = auth.uid() and kind = 'compra' and arrived;
   delete from card_groups where user_id = auth.uid() and id = any (v_groups);
   return v_paths;
 end;

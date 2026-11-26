@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pop Collection</title>
-<meta name="description" content="Controle os pagamentos, a chegada e a coleção dos seus photocards.">
+<meta name="description" content="Controle as compras, os pagamentos, a chegada e a coleção dos seus photocards.">
 <meta name="theme-color" content="#f3f2f7">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="pt_BR">
@@ -23,7 +23,7 @@
 <meta name="apple-mobile-web-app-title" content="Pop Collection">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -69,50 +69,93 @@
 </section>
 
 <!-- App -->
-<div class="wrap" id="appView" hidden>
-  <header>
-    <div>
-      <h1>Pop Collection</h1>
-      <p>Acompanhe o pagamento, a chegada e a coleção dos seus photocards.</p>
+<div class="app" id="appView" hidden>
+  <!-- navegação: barra lateral no computador, barra inferior no celular -->
+  <nav class="sidenav" aria-label="Seções do app">
+    <div class="brand"><img src="icons/logo.svg" alt="" width="30" height="30"><span>Pop Collection</span></div>
+    <button class="btn-primary side-add" type="button" id="sideAdd" aria-haspopup="dialog">+ Registrar compra</button>
+    <div class="navlinks">
+      <a href="#inicio" data-sec="inicio">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></svg>
+        <span>Início</span>
+      </a>
+      <a href="#compras" data-sec="compras">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 11.1a1 1 0 0 1-1 .9H7.2a1 1 0 0 1-1-.9z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg>
+        <span>Compras</span><b class="badge" id="nPend" hidden></b>
+      </a>
+      <a href="#financeiro" data-sec="financeiro">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>
+        <span>Financeiro</span>
+      </a>
     </div>
-    <div class="userbar"><span>Conta: <b id="uEmail"></b></span><button class="btn-ghost" type="button" id="logout">Sair</button></div>
-  </header>
+    <div class="side-user"><span>Conta: <b id="uEmail"></b></span><button class="btn-ghost" type="button" id="logout">Sair</button></div>
+  </nav>
 
-  <div id="notice" class="notice" hidden></div>
+  <main class="main">
+    <header class="topbar">
+      <div class="brand brand-m"><img src="icons/logo.svg" alt="" width="26" height="26"><span>Pop Collection</span></div>
+      <button class="btn-ghost btn-sm" type="button" id="logoutM">Sair</button>
+    </header>
 
-  <section class="summary" aria-label="Resumo de gastos">
-    <div class="big"><span class="label">Total gasto com photocards</span><span class="value" id="sTotal">R$ 0,00</span><span class="sub" id="sTotalSub">preço, fretes e taxas de todos os cards e grupos</span></div>
-    <div><span class="label">Já pago</span><span class="value" id="sPaid">R$ 0,00</span><span class="sub" id="sPaidSub">&nbsp;</span></div>
-    <div><span class="label">Falta pagar</span><span class="value" id="sDue">R$ 0,00</span><span class="sub" id="sDueSub">&nbsp;</span></div>
-  </section>
+    <div id="notice" class="notice" hidden></div>
 
-  <div class="bar">
-    <nav class="tabs" role="tablist" id="mainTabs" aria-label="Seções">
-      <button type="button" role="tab" data-tab="pay" aria-selected="true">Pagamento <span class="count" id="cPay">0</span></button>
-      <button type="button" role="tab" data-tab="arr" aria-selected="false">Chegada <span class="count" id="cArr">0</span></button>
-      <button type="button" role="tab" data-tab="col" aria-selected="false">Coleção <span class="count" id="cCol">0</span></button>
-    </nav>
-    <button class="btn-ghost btn-groups" type="button" id="openGroups" aria-haspopup="dialog">Grupos</button>
-    <button class="btn-primary btn-add" type="button" id="openAdd" aria-haspopup="dialog">+ Cadastrar Photocard</button>
-  </div>
+    <!-- Início -->
+    <section class="sec" id="secInicio" aria-labelledby="hInicio">
+      <h1 id="hInicio">Início</h1>
+      <section class="summary" aria-label="Resumo de gastos">
+        <div class="big"><span class="label">Total investido</span><span class="value" id="sTotal">R$ 0,00</span><span class="sub" id="sTotalSub">preço, fretes e taxas de todas as compras</span></div>
+        <div><span class="label">Já pago</span><span class="value" id="sPaid">R$ 0,00</span><span class="sub" id="sPaidSub">&nbsp;</span></div>
+        <div><span class="label">Falta pagar</span><span class="value" id="sDue">R$ 0,00</span><span class="sub" id="sDueSub">&nbsp;</span></div>
+      </section>
+      <div class="home" id="home"></div>
+    </section>
 
-  <section class="panel" id="panel"></section>
+    <!-- Compras -->
+    <section class="sec" id="secCompras" aria-labelledby="hCompras" hidden>
+      <div class="sec-head">
+        <h1 id="hCompras">Compras</h1>
+        <div class="sec-btns">
+          <button class="btn-ghost btn-groups" type="button" id="openGroups" aria-haspopup="dialog">Pedidos</button>
+          <button class="btn-primary btn-add" type="button" id="openAdd" aria-haspopup="dialog">+ Registrar compra</button>
+        </div>
+      </div>
+      <nav class="tabs" role="tablist" id="mainTabs" aria-label="Etapas da compra">
+        <button type="button" role="tab" data-tab="pay" aria-selected="true">Pagamento <span class="count" id="cPay">0</span></button>
+        <button type="button" role="tab" data-tab="arr" aria-selected="false">Chegada <span class="count" id="cArr">0</span></button>
+        <button type="button" role="tab" data-tab="col" aria-selected="false">Concluídas <span class="count" id="cCol">0</span></button>
+      </nav>
+      <div class="filters" id="filters">
+        <input type="search" id="qName" placeholder="Buscar pelo nome" aria-label="Buscar compra pelo nome">
+        <select id="qArtist" aria-label="Filtrar por grupo de K-pop"></select>
+        <select id="qSeller" aria-label="Filtrar por vendedor"></select>
+        <select id="qKind" aria-label="Filtrar por categoria"></select>
+        <button class="icon-btn" type="button" id="qClear" hidden>Limpar filtros</button>
+      </div>
+      <section class="panel" id="panel"></section>
+    </section>
 
-  <!-- celular: um botão que abre as opções de cadastro e de grupos -->
+    <!-- Financeiro -->
+    <section class="sec" id="secFinanceiro" aria-labelledby="hFin" hidden>
+      <h1 id="hFin">Financeiro</h1>
+      <div class="fin" id="fin"></div>
+    </section>
+  </main>
+
+  <!-- celular: o + abre as opções de cadastro -->
   <div class="fab-shade" id="fabShade" hidden></div>
   <div class="fab" id="fab">
     <div class="fab-menu" id="fabMenu" hidden>
-      <button class="btn-ghost fab-item" type="button" id="fabGroups" aria-haspopup="dialog">Grupos</button>
-      <button class="btn-primary fab-item" type="button" id="fabAdd" aria-haspopup="dialog">Cadastrar photocard</button>
+      <button class="btn-ghost fab-item" type="button" id="fabGroups" aria-haspopup="dialog">Pedidos</button>
+      <button class="btn-primary fab-item" type="button" id="fabAdd" aria-haspopup="dialog">Registrar uma compra</button>
     </div>
-    <button class="btn-primary fab-main" type="button" id="fabMain" aria-expanded="false" aria-controls="fabMenu" aria-label="Abrir opções: cadastrar photocard ou grupos"><span aria-hidden="true">+</span></button>
+    <button class="btn-primary fab-main" type="button" id="fabMain" aria-expanded="false" aria-controls="fabMenu" aria-label="Abrir opções de cadastro"><span aria-hidden="true">+</span></button>
   </div>
-
-  <!-- Cadastro / edição de photocards (abre pelo botão "+ Cadastrar Photocard" ou por Editar) -->
+  
+  <!-- Cadastro / edição de compras (abre pelo "+ Registrar compra", pelo + ou por Editar) -->
   <dialog class="sheet" id="addDialog" aria-labelledby="addTitle">
     <div class="sheet-box">
       <div class="sheet-head">
-        <h2 id="addTitle">Cadastrar photocard</h2>
+        <h2 id="addTitle">Registrar compra</h2>
         <button class="icon-btn sheet-close" type="button" id="addClose" aria-label="Fechar">✕</button>
       </div>
       <form class="add" id="addForm" autocomplete="off">
@@ -137,57 +180,66 @@
           <p class="hint" id="fHint"></p>
         </div>
         <div class="grouprow" id="fGroupRow">
-          <label class="f">Grupo
+          <label class="f">Pedido
             <select id="fGroup">
-              <option value="">Sem grupo</option>
-              <option value="new">+ Novo grupo</option>
-              <optgroup label="Seus grupos" id="fGroupList"></optgroup>
+              <option value="">Sem pedido</option>
+              <option value="new">+ Novo pedido</option>
+              <optgroup label="Seus pedidos" id="fGroupList"></optgroup>
             </select>
           </label>
-          <label class="f" id="fGroupNameWrap" hidden>Nome do grupo
+          <label class="f" id="fGroupNameWrap" hidden>Nome do pedido
             <input type="text" id="fGroupName" placeholder="ex.: Compra de novembro" maxlength="80">
           </label>
           <p class="hint" id="fGroupHint"></p>
         </div>
+        <div class="daterow">
+          <label class="f">Data da compra
+            <input type="date" id="fDate">
+          </label>
+          <label class="f">Previsão de chegada (opcional)
+            <input type="date" id="fExpected">
+          </label>
+        </div>
         <div class="entries" id="entries"></div>
         <button class="btn-ghost btn-more" type="button" id="addEntry">+ Adicionar outro photocard</button>
         <fieldset class="gfees" id="fGroupFees" hidden>
-          <legend>Fretes e taxas do grupo</legend>
-          <p class="hint">Contam uma vez só, para todos os cards do grupo.</p>
+          <legend>Fretes e taxas do pedido</legend>
+          <p class="hint">Contam uma vez só, para todos os cards do pedido.</p>
           <div class="fields" id="fGroupFeeFields"></div>
         </fieldset>
         <div class="form-foot">
           <div class="form-total" aria-live="polite"><span id="fTotalLabel">Total</span> <b class="num" id="fTotal">R$ 0,00</b><span class="total-preview" id="formMsg">O card entra na aba Pagamento.</span></div>
           <div class="form-btns">
             <button class="btn-ghost" type="button" id="fCancel">Cancelar</button>
-            <button class="btn-primary" type="submit" id="fSubmit">Cadastrar photocard</button>
+            <button class="btn-primary" type="submit" id="fSubmit">Registrar compra</button>
           </div>
         </div>
         <datalist id="sellerList"></datalist>
+        <datalist id="artistList"></datalist>
       </form>
     </div>
   </dialog>
 
-  <!-- Grupos: lista e criação/edição -->
+  <!-- Pedidos: lista e criação/edição -->
   <dialog class="sheet" id="groupDialog" aria-labelledby="gTitle">
     <div class="sheet-box">
       <div class="sheet-head">
         <div class="sheet-title">
-          <button class="icon-btn sheet-back" type="button" id="gBack" aria-label="Voltar para a lista de grupos" hidden>←</button>
-          <h2 id="gTitle">Grupos</h2>
+          <button class="icon-btn sheet-back" type="button" id="gBack" aria-label="Voltar para a lista de pedidos" hidden>←</button>
+          <h2 id="gTitle">Pedidos</h2>
         </div>
         <button class="icon-btn sheet-close" type="button" id="gClose" aria-label="Fechar">✕</button>
       </div>
       <div class="glist" id="gListView">
         <div class="glist-head">
           <p>Junte cards da mesma compra: os fretes e a taxa contam uma vez só.</p>
-          <button class="btn-primary" type="button" id="gNew">+ Novo grupo</button>
+          <button class="btn-primary" type="button" id="gNew">+ Novo pedido</button>
         </div>
         <div id="gItems"></div>
       </div>
       <div class="glist" id="gDetailView" hidden></div>
       <form class="add gform" id="gForm" autocomplete="off" hidden>
-        <label class="f">Nome do grupo
+        <label class="f">Nome do pedido
           <input type="text" id="gName" placeholder="ex.: Compra de novembro" maxlength="80" required>
         </label>
         <div class="kind">
@@ -206,23 +258,23 @@
           <p class="hint" id="gHint"></p>
         </div>
         <fieldset class="gfees">
-          <legend>Fretes e taxas do grupo</legend>
-          <p class="hint">Contam uma vez só, para todos os cards do grupo.</p>
+          <legend>Fretes e taxas do pedido</legend>
+          <p class="hint">Contam uma vez só, para todos os cards do pedido.</p>
           <div class="fields" id="gFeeFields"></div>
         </fieldset>
         <fieldset class="gfees">
-          <legend>Photocards do grupo <span class="count" id="gCount">0</span></legend>
+          <legend>Photocards do pedido <span class="count" id="gCount">0</span></legend>
           <input type="search" id="gSearch" placeholder="Buscar card pelo nome" aria-label="Buscar card pelo nome" hidden>
           <div class="picker" id="gPicker"></div>
           <div class="ownfees" id="gOwnFees" hidden></div>
         </fieldset>
         <div class="confirm" id="gDelConfirm" hidden></div>
         <div class="form-foot">
-          <div class="form-total" aria-live="polite"><span>Total do grupo</span> <b class="num" id="gTotal">R$ 0,00</b></div>
+          <div class="form-total" aria-live="polite"><span>Total do pedido</span> <b class="num" id="gTotal">R$ 0,00</b></div>
           <div class="form-btns">
-            <button class="btn-danger" type="button" id="gDelete" hidden>Excluir grupo</button>
+            <button class="btn-danger" type="button" id="gDelete" hidden>Excluir pedido</button>
             <button class="btn-ghost" type="button" id="gCancel">Cancelar</button>
-            <button class="btn-primary" type="submit" id="gSubmit">Criar grupo</button>
+            <button class="btn-primary" type="submit" id="gSubmit">Criar pedido</button>
           </div>
         </div>
       </form>
@@ -242,7 +294,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=14"></script>
-<script src="app.js?v=14"></script>
+<script src="config.js?v=15"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
