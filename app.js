@@ -167,7 +167,18 @@
     enterApp();
   });
 
-  const logout = async () => { await sb.auth.signOut(); };
+  // Sair: apaga a sessão deste aparelho. Se o Supabase não responder (rede, sessão travada),
+  // limpa a sessão guardada no navegador e recarrega, para nunca ficar logada sem querer.
+  const logout = async () => {
+    const forceOut = () => {
+      try { Object.keys(localStorage).filter((k) => k.startsWith("sb-")).forEach((k) => localStorage.removeItem(k)); } catch (e) {}
+      location.replace(location.pathname);
+    };
+    try {
+      const res = await Promise.race([sb.auth.signOut({ scope: "local" }), new Promise((r) => setTimeout(() => r({ error: "timeout" }), 4000))]);
+      if (res && res.error) forceOut();
+    } catch (e) { forceOut(); }
+  };
   $("psLogout").addEventListener("click", logout);
 
   sb.auth.onAuthStateChange((event, session) => {
