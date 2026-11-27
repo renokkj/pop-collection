@@ -26,3 +26,6 @@ Desktop.ini
 
 # Arquivos compactados
 *.zip
+
+# Backend Java (arquivos gerados pelo Maven)
+backend/target/
