@@ -24,7 +24,7 @@
     const token = data.session && data.session.access_token;
     if (!API || !token) throw new Error("sem API");
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 60000); // no plano grátis, a API pode estar "acordando"
+    const timer = setTimeout(() => ctl.abort(), 90000); // no plano grátis, a API pode estar "acordando"
     try {
       const res = await fetch(API + path, { headers: { Authorization: "Bearer " + token }, signal: ctl.signal });
       if (!res.ok) throw new Error("API respondeu " + res.status);
@@ -2561,7 +2561,11 @@
     const req = finReq = { sig };
     api("/api/financeiro/resumo")
       .then((data) => { if (finReq !== req) return; finApi = { sig, data }; if (sec === "financeiro") render(); })
-      .catch(() => {}); // sem API, o Financeiro continua com as contas feitas aqui
+      .catch(() => {
+        // sem API, o Financeiro continua com as contas feitas aqui; tenta de novo daqui a pouco
+        // (no plano grátis a API pode levar mais de um minuto para acordar)
+        setTimeout(() => { if (finReq === req) { finReq = null; if (sec === "financeiro") render(); } }, 15000);
+      });
   }
 
   function renderFin(sm) {
