@@ -1,7 +1,7 @@
 package com.popcollection.api.status;
 
 import java.time.Clock;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +30,6 @@ public class StatusController {
     @GetMapping
     @Operation(summary = "Mostra o nome, a versão e o horário do servidor")
     public StatusResponse status() {
-        return new StatusResponse("Pop Collection API", version, Instant.now(clock));
+        return new StatusResponse("Pop Collection API", version, OffsetDateTime.now(clock));
     }
 }

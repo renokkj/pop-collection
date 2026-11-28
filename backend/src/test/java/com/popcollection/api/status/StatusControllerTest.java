@@ -6,7 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +15,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.popcollection.api.config.ClockConfig;
+
 @WebMvcTest(StatusController.class)
 @Import(StatusControllerTest.FixedClock.class)
 class StatusControllerTest {
@@ -24,19 +25,19 @@ class StatusControllerTest {
     MockMvc mvc;
 
     @Test
-    void mostraNomeVersaoEHorario() throws Exception {
+    void mostraNomeVersaoEHorarioDeBrasilia() throws Exception {
         mvc.perform(get("/api/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.app").value("Pop Collection API"))
                 .andExpect(jsonPath("$.versao").isNotEmpty())
-                .andExpect(jsonPath("$.horario").value("2026-11-27T12:00:00Z"));
+                .andExpect(jsonPath("$.horario").value("2026-11-27T09:00:00-03:00"));
     }
 
     @TestConfiguration
     static class FixedClock {
         @Bean
         Clock clock() {
-            return Clock.fixed(Instant.parse("2026-11-27T12:00:00Z"), ZoneOffset.UTC);
+            return Clock.fixed(Instant.parse("2026-11-27T12:00:00Z"), ClockConfig.FUSO_BRASIL);
         }
     }
 }
