@@ -15,7 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 /** Sobe a aplicação inteira e confere o que a hospedagem e o site precisam. */
 @SpringBootTest
 @AutoConfigureMockMvc
-class PopCollectionApplicationTest {
+class PopCollectionApplicationTest extends BancoDeTeste {
 
     @Autowired
     MockMvc mvc;
@@ -28,18 +28,21 @@ class PopCollectionApplicationTest {
     }
 
     @Test
-    void swaggerDescreveAApi() throws Exception {
+    void swaggerDescreveAApiEOLogin() throws Exception {
         mvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.info.title").value("Pop Collection API"))
-                .andExpect(jsonPath("$.paths['/api/status']").exists());
+                .andExpect(jsonPath("$.paths['/api/status']").exists())
+                .andExpect(jsonPath("$.paths['/api/me']").exists())
+                .andExpect(jsonPath("$.components.securitySchemes['login-supabase'].scheme").value("bearer"));
     }
 
     @Test
     void siteDoGithubPagesPodeChamarAApi() throws Exception {
-        mvc.perform(options("/api/status")
+        mvc.perform(options("/api/me")
                         .header("Origin", "https://renokkj.github.io")
-                        .header("Access-Control-Request-Method", "GET"))
+                        .header("Access-Control-Request-Method", "GET")
+                        .header("Access-Control-Request-Headers", "authorization"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "https://renokkj.github.io"));
     }
@@ -50,5 +53,10 @@ class PopCollectionApplicationTest {
                         .header("Origin", "https://site-qualquer.example")
                         .header("Access-Control-Request-Method", "GET"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void semLoginNaoEntra() throws Exception {
+        mvc.perform(get("/api/me")).andExpect(status().isUnauthorized());
     }
 }

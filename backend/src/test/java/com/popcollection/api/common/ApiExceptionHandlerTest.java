@@ -1,5 +1,6 @@
 package com.popcollection.api.common;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,12 +15,14 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+
+import com.popcollection.api.config.SecurityConfig;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @WebMvcTest(ApiExceptionHandlerTest.ExemploController.class)
-@Import({ApiExceptionHandler.class, ApiExceptionHandlerTest.ExemploController.class})
+@Import({SecurityConfig.class, ApiExceptionHandler.class, ApiExceptionHandlerTest.ExemploController.class})
 class ApiExceptionHandlerTest {
 
     @Autowired
@@ -27,7 +30,7 @@ class ApiExceptionHandlerTest {
 
     @Test
     void dadosInvalidosViramErro400ComOsCampos() throws Exception {
-        mvc.perform(post("/teste/cards")
+        mvc.perform(post("/teste/cards").with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nome\": \"\"}"))
                 .andExpect(status().isBadRequest())

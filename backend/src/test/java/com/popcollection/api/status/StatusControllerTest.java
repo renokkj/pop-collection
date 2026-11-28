@@ -16,16 +16,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.popcollection.api.config.ClockConfig;
+import com.popcollection.api.config.SecurityConfig;
 
 @WebMvcTest(StatusController.class)
-@Import(StatusControllerTest.FixedClock.class)
+@Import({SecurityConfig.class, StatusControllerTest.FixedClock.class})
 class StatusControllerTest {
 
     @Autowired
     MockMvc mvc;
 
     @Test
-    void mostraNomeVersaoEHorarioDeBrasilia() throws Exception {
+    void publicoSemLoginComHorarioDeBrasilia() throws Exception {
         mvc.perform(get("/api/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.app").value("Pop Collection API"))

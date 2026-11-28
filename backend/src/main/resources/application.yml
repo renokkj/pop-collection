@@ -1,6 +1,28 @@
 spring:
   application:
     name: pop-collection-api
+  # no computador, os segredos ficam no arquivo backend/.env (que nunca vai para o GitHub)
+  config:
+    import: optional:file:.env[.properties]
+
+  # Banco: o PostgreSQL do Supabase, pelo pooler em modo "session", com o usuário pop_api
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 0
+  jpa:
+    open-in-view: false
+    hibernate:
+      # a API nunca cria nem altera tabelas sozinha: só confere se o código bate com o banco
+      ddl-auto: validate
+  flyway:
+    # o histórico de mudanças fica no esquema "api", separado das tabelas do app
+    schemas: api
+    default-schema: api
+    create-schemas: false
 
 server:
   # a hospedagem (Render) informa a porta pela variável PORT
@@ -8,6 +30,11 @@ server:
   shutdown: graceful
 
 pop:
+  supabase:
+    # endereço do projeto (é público, o mesmo do config.js do site)
+    url: ${SUPABASE_URL:https://giimoieqyosmklpdhhfn.supabase.co}
+    # só para projetos com a chave antiga "JWT secret"; deixe vazio nos demais
+    jwt-secret: ${SUPABASE_JWT_SECRET:}
   cors:
     # endereços separados por vírgula; na hospedagem, use POP_CORS_ALLOWED_ORIGINS
     allowed-origins: ${POP_CORS_ALLOWED_ORIGINS:https://renokkj.github.io,http://localhost:5500,http://127.0.0.1:5500}
