@@ -16,6 +16,24 @@
   }
   const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
 
+  // ---------- API Java (backend/) ----------
+  // Por enquanto só o Financeiro vem da API. Sem API_URL no config.js, o site faz as contas sozinho.
+  const API = String(cfg.API_URL || "").replace(/\/+$/, "");
+  async function api(path) {
+    const { data } = await sb.auth.getSession();
+    const token = data.session && data.session.access_token;
+    if (!API || !token) throw new Error("sem API");
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 60000); // no plano grátis, a API pode estar "acordando"
+    try {
+      const res = await fetch(API + path, { headers: { Authorization: "Bearer " + token }, signal: ctl.signal });
+      if (!res.ok) throw new Error("API respondeu " + res.status);
+      return await res.json();
+    } finally { clearTimeout(timer); }
+  }
+  // acorda a API assim que a pessoa entra, para o Financeiro já encontrar ela de pé
+  const wakeApi = () => { if (API) fetch(API + "/api/status").catch(() => {}); };
+
   // ---------- estado ----------
   let user = null;
   let cards = [];
@@ -199,6 +217,7 @@
     profile = data || null;
     if (!profile && !missing) { openSetup(); return; }
     if (profile) { loadFollowCounts(); loadNotifs(); }
+    wakeApi();
     show("appView");
     loading = true; render();
     await loadAll();
@@ -2504,9 +2523,8 @@
       el("div", { class: "split-legend" }, ...parts.map(([l, v], i) => el("span", { class: "leg" },
         el("i", { class: "sp-" + i, "aria-hidden": "true" }), el("b", { text: l }), el("span", { class: "num", text: `${money(v)} · ${pct(v)}` })))));
   }
-  function renderFin(sm) {
-    const fin = $("fin");
-    if (loading) { fin.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Carregando…" }))); return; }
+  // as contas do Financeiro feitas aqui no site, no mesmo formato que a API devolve
+  function finLocal(sm) {
     const list = sm.list;
     // de onde vem o total: preço dos cards, fretes e taxas (cards sem pedido + pedidos)
     let price = 0, ship = 0, tax = 0;
@@ -2515,41 +2533,74 @@
       const v = Number(src[x.key]) || 0;
       if (x.key === "import_tax") tax += v; else ship += v;
     }));
-    const kpi = (label, value, sub, cls) => el("div", { class: "kpi" + (cls ? " " + cls : "") },
-      el("span", { class: "label", text: label }), el("span", { class: "value num", text: money(value) }), sub ? el("span", { class: "sub", text: sub }) : null);
-
     // por categoria: cards e pedidos pelo tipo e origem
     const cat = new Map(KIND_FILTERS.map(([k, t]) => [k, [t, 0, 0]]));
     list.forEach((c) => { const r = cat.get(c.gift ? "gift" : kindKey(c)); r[1] += total(c); r[2]++; });
     groups.forEach((g) => { cat.get(kindKey(g))[1] += fees(g); });
-    const catRows = [...cat.values()].filter((r) => r[0] !== "Presente" && r[1] > 0).sort((a, b) => b[1] - a[1]).map(([t, v, n]) => [t, cents(v), plural(n, "card", "cards")]);
-    const gifts = list.filter((c) => c.gift).length;
-
+    const porCategoria = [...cat.entries()].filter(([k, r]) => k !== "gift" && r[1] > 0)
+      .map(([k, [nome, v, n]]) => ({ categoria: k, nome, valor: cents(v), cards: n }))
+      .sort((a, b) => b.valor - a.valor);
     // por mês, pela data da compra; fretes de pedido pela data do pedido
     const months = new Map();
     const addMonth = (iso, v) => { const k = (iso || "").slice(0, 7); if (!k) return; months.set(k, cents((months.get(k) || 0) + v)); };
     list.forEach((c) => addMonth(buyDate(c), total(c)));
     groups.forEach((g) => addMonth((g.created_at || "").slice(0, 10), fees(g)));
-    const monthRows = [...months.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12)
-      .map(([k, v]) => [`${MES[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`, v]);
+    const porMes = [...months.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([mes, valor]) => ({ mes, valor }));
+    return {
+      totalInvestido: sm.all, jaPago: sm.paid, faltaPagar: sm.dueSum,
+      emPhotocards: cents(price), emFretes: cents(ship), emTaxas: cents(tax),
+      cards: sm.n, comprasEmAberto: sm.byStage.pay.length, comprasQuitadas: sm.byStage.arr.length + sm.byStage.col.length,
+      presentes: list.filter((c) => c.gift).length, arquivado: { total: archived.total, cards: archived.count },
+      porMes, porCategoria,
+    };
+  }
+  // resposta da API para os dados que estão na tela (sig = as contas locais desses dados)
+  let finApi = null, finReq = null;
+  function loadFinApi(sig) {
+    if (!API || (finReq && finReq.sig === sig)) return;
+    const req = finReq = { sig };
+    api("/api/financeiro/resumo")
+      .then((data) => { if (finReq !== req) return; finApi = { sig, data }; if (sec === "financeiro") render(); })
+      .catch(() => {}); // sem API, o Financeiro continua com as contas feitas aqui
+  }
 
-    fin.replaceChildren(
+  function renderFin(sm) {
+    const fin = $("fin");
+    if (loading) { fin.replaceChildren(el("div", { class: "empty" }, el("strong", { text: "Carregando…" }))); return; }
+    const local = finLocal(sm);
+    const sig = JSON.stringify(local);
+    const fromApi = !!(finApi && finApi.sig === sig);
+    if (!fromApi) loadFinApi(sig);
+    const d = fromApi ? finApi.data : local;
+    const num = (v) => Number(v) || 0;
+    const kpi = (label, value, sub, cls) => el("div", { class: "kpi" + (cls ? " " + cls : "") },
+      el("span", { class: "label", text: label }), el("span", { class: "value num", text: money(value) }), sub ? el("span", { class: "sub", text: sub }) : null);
+
+    const catRows = d.porCategoria.map((c) => [c.nome, num(c.valor), plural(c.cards, "card", "cards")]);
+    const months = new Map(d.porMes.map((m) => [m.mes, num(m.valor)]));
+    const monthRows = [...d.porMes].reverse().slice(0, 12)
+      .map((m) => [`${MES[Number(m.mes.slice(5, 7)) - 1]} ${m.mes.slice(0, 4)}`, num(m.valor)]);
+    const arq = d.arquivado || { total: 0, cards: 0 };
+
+    // filter(Boolean): replaceChildren escreveria "null" na tela para as partes que não aparecem
+    fin.replaceChildren(...[
       el("div", { class: "kpis" },
-        kpi("Total investido", sm.all, plural(sm.n, "card", "cards") + (archived.count ? ` · inclui ${money(archived.total)} de coleções apagadas` : ""), "big"),
-        kpi("Já pago", sm.paid, plural(sm.byStage.arr.length + sm.byStage.col.length, "compra quitada", "compras quitadas"), "ok"),
-        kpi("Falta pagar", sm.dueSum, plural(sm.byStage.pay.length, "compra em aberto", "compras em aberto"), sm.dueSum > 0 ? "warn" : ""),
-        kpi("Em photocards", cents(price), "preço dos cards"),
-        kpi("Em fretes", cents(ship), "até a GOM e até você"),
-        kpi("Em taxas", cents(tax), "taxa de importação")),
-      splitBar([["Photocards", cents(price)], ["Fretes", cents(ship)], ["Taxas", cents(tax)]]),
+        kpi("Total investido", d.totalInvestido, plural(d.cards, "card", "cards") + (arq.cards ? ` · inclui ${money(arq.total)} de coleções apagadas` : ""), "big"),
+        kpi("Já pago", d.jaPago, plural(d.comprasQuitadas, "compra quitada", "compras quitadas"), "ok"),
+        kpi("Falta pagar", d.faltaPagar, plural(d.comprasEmAberto, "compra em aberto", "compras em aberto"), num(d.faltaPagar) > 0 ? "warn" : ""),
+        kpi("Em photocards", d.emPhotocards, "preço dos cards"),
+        kpi("Em fretes", d.emFretes, "até a GOM e até você"),
+        kpi("Em taxas", d.emTaxas, "taxa de importação")),
+      splitBar([["Photocards", num(d.emPhotocards)], ["Fretes", num(d.emFretes)], ["Taxas", num(d.emTaxas)]]),
       box("Gasto nos últimos 12 meses", null, monthColumns(months),
         el("p", { class: "hint", text: "Pela data da compra. Fretes de grupo entram no mês em que o grupo foi criado." })),
       el("div", { class: "home-grid" },
         box("Por mês", null, bars(monthRows, null)),
-        box("Por categoria", null, bars(catRows, gifts ? plural(gifts, "presente sem custo", "presentes sem custo") + " fora da conta." : null))),
-      sm.dueSum > 0 ? el("div", { class: "fin-foot" },
-        el("span", { text: `Falta pagar ${money(sm.dueSum)}.` }),
-        el("button", { class: "btn-primary", type: "button", text: "Ver pagamentos pendentes", onclick: () => go("compras", "pay") })) : null);
+        box("Por categoria", null, bars(catRows, d.presentes ? plural(d.presentes, "presente sem custo", "presentes sem custo") + " fora da conta." : null))),
+      num(d.faltaPagar) > 0 ? el("div", { class: "fin-foot" },
+        el("span", { text: `Falta pagar ${money(d.faltaPagar)}.` }),
+        el("button", { class: "btn-primary", type: "button", text: "Ver pagamentos pendentes", onclick: () => go("compras", "pay") })) : null,
+      fromApi ? el("p", { class: "hint fin-api", text: "Contas feitas pela API do Pop Collection." }) : null].filter(Boolean));
   }
 
   function render() {
